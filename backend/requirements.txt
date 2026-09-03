@@ -1,0 +1,5 @@
+fastapi==0.115.14
+uvicorn[standard]==0.32.1
+# [socks] SART: trafik DPI bypass proxy'sine socks5 ile yonlendiriliyor.
+# Bu extra olmadan httpx proxy kullanmayi ImportError ile reddeder.
+httpx[socks]==0.27.2

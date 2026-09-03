@@ -1,0 +1,12 @@
+Ag engelli oldugu icin imajlar derlenemiyorsa, hazir imaj dosyalarini
+BU KLASORE koyun:
+
+    betodds.tar.gz
+    betodds-proxy.tar.gz
+
+Sonra KURULUM.bat calistirin. Script bu dosyalari gorup derleme yerine
+yukler ve etiketlerini duzeltir.
+
+Imajlari kendiniz uretmek isterseniz (erisimi olan bir makinede):
+    docker save betodds:latest       | gzip > betodds.tar.gz
+    docker save betodds-proxy:latest | gzip > betodds-proxy.tar.gz

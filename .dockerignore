@@ -1,0 +1,16 @@
+backend/.venv
+backend/env
+frontend/node_modules
+frontend/dist
+frontend/shot*.png
+data
+**/__pycache__
+*.pyc
+.git
+
+# vendor/byedpi derleme ciktilari: scripts/proxy-baslat.sh bunlari HOST'ta
+# (glibc) uretiyor. Imaja girerlerse Alpine icindeki 'make' onlari guncel
+# sanip yeniden derlemez ve musl imajina glibc ikilisi kopyalanir - konteyner
+# "exec ciadpi: no such file or directory" ile duser.
+vendor/byedpi/*.o
+vendor/byedpi/ciadpi

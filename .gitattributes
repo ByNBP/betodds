@@ -1,0 +1,7 @@
+# Kabuk betikleri ve konteyner dosyalari LF olmali: Windows'ta checkout
+# sirasinda CRLF'e cevrilirse konteyner icinde calismazlar.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.Dockerfile text eol=lf
+*.yml       text eol=lf
+*.ps1       text eol=crlf

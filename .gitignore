@@ -1,0 +1,27 @@
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+frontend/shot*.png
+__pycache__/
+*.pyc
+tools/
+logs/
+
+# Veritabani ve merge_db.py'nin biraktigi yedekler
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db.bak-*
+
+# Hazir docker imajlari (~295 MB) - `docker build` ile uretilir,
+# bkz. scripts/package.sh basindaki not.
+images/*.tar
+images/*.tar.gz
+
+# Cevrimdisi Windows paketi icin indirilen ucuncu taraf ikilileri (~49 MB).
+# `scripts/vendor-indir.sh` yeniden getirir. byedpi kaynagi ve Windows
+# ikilisi depoda KALIR: onlarin kaynagi GitHub ve hedef aglarda GitHub
+# engelli - vendorlamanin sebebi bu.
+vendor/python/
+vendor/node/
+vendor/wheels/

@@ -1,0 +1,26 @@
+[
+  {
+    "champ_id": 2986291,
+    "name": "FC 26. 5x5 Rush. Süper Lig",
+    "slug": "fc26-5x5-rush-superleague",
+    "enabled": true,
+    "virtual": true,
+    "extra": {
+      "tourney_id": 149,
+      "match_minutes": 11.0,
+      "short_name": "5x5 Rush"
+    }
+  },
+  {
+    "champ_id": 2860561,
+    "name": "FC 25. 3x3. Konferans Ligi",
+    "slug": "fc25-3x3-conference-league",
+    "enabled": true,
+    "virtual": true,
+    "extra": {
+      "tourney_id": 129,
+      "match_minutes": 10.0,
+      "short_name": "3x3 Konferans"
+    }
+  }
+]

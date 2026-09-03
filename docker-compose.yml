@@ -1,0 +1,38 @@
+# Windows/macOS/Linux'ta ayni sekilde calisir.
+#   docker compose up -d --build      ->  http://localhost:8000
+#
+# Proxy yigina dahil: host agina (--network=host / host.docker.internal)
+# bagimlilik yok - Docker Desktop bunlari desteklemiyor ya da farkli davraniyor.
+
+services:
+  proxy:
+    build:
+      context: .
+      dockerfile: docker/proxy.Dockerfile
+    image: betodds-proxy:latest
+    container_name: betodds-proxy
+    restart: unless-stopped
+    # Strateji .env dosyasindaki CIADPI_ARGS ile degistirilebilir.
+    # scripts/tani-veri.ps1 calisan stratejiyi bulup oraya yazar.
+    environment:
+      CIADPI_ARGS: "${CIADPI_ARGS:--r 1+s}"
+
+  betodds:
+    build: .
+    image: betodds:latest
+    container_name: betodds
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - backend/env
+    environment:
+      # env_file'daki degeri EZER: proxy artik ayni ag icinde bir servis.
+      # VPN kullaniyorsan kok .env icine BOS deger yaz -> dogrudan baglanir:
+      #   BETODDS_PROXY=
+      # (":-" degil "-" kullaniliyor: bos deger de gecerli sayilsin.)
+      BETODDS_PROXY: "${BETODDS_PROXY-socks5://proxy:1080}"

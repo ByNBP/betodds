@@ -1,0 +1,26 @@
+{
+  "name": "betodds-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "smoke": "node scripts/smoke.mjs",
+    "shot": "node scripts/shot.mjs",
+    "shot:el": "node scripts/shot-el.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^25.0.1",
+    "puppeteer-core": "^24.43.1",
+    "vite": "^5.4.8"
+  }
+}
