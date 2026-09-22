@@ -1,0 +1,45 @@
+# Sunucu (canli) kurulumu: betodds + Caddy (HTTPS + sifre).
+#   cd deploy && docker compose up -d --build
+#
+# Yerel docker-compose.yml'den farklari:
+#   - byedpi proxy'si yok: sunucu yurt disinda, kaynak siteye dogrudan erisiyor.
+#   - betodds portu disari acilmiyor; yalnizca ayni agdaki Caddy erisir.
+#   - SITE_DOMAIN deploy/.env icinden, sifre deploy/auth.caddy icinden okunur
+#     (ikisi de sunucuya ozel, depoda yok - bkz. *.example).
+
+services:
+  betodds:
+    build:
+      context: ..
+    image: betodds:latest
+    container_name: betodds
+    restart: unless-stopped
+    volumes:
+      - ../data:/app/data
+    env_file:
+      - ../backend/env
+    environment:
+      # backend/env'deki socks5 adresini EZER: bos = dogrudan baglanti.
+      BETODDS_PROXY: ""
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: betodds-caddy
+    restart: unless-stopped
+    depends_on:
+      - betodds
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: "${SITE_DOMAIN:?deploy/.env icinde SITE_DOMAIN tanimli olmali}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./auth.caddy:/etc/caddy/auth.caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,11 @@
+# Sertifika (Let's Encrypt) Caddy tarafindan otomatik alinir ve yenilenir.
+
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
+{$SITE_DOMAIN} {
+	import auth.caddy
+	encode zstd gzip
+	reverse_proxy betodds:8000
+}

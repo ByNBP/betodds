@@ -32,3 +32,8 @@ vendor/wheels/
 # uretilebilir oldugu icin depoda tutulmuyor (paket.sh gerekirse derler).
 vendor/wheels-linux/
 vendor/byedpi-linux-*/
+
+# Sunucuya ozel canli kurulum ayarlari (bkz. deploy/*.example)
+deploy/.env
+deploy/auth.caddy
+data/yedek/

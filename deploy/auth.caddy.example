@@ -1,0 +1,5 @@
+# Kopyalayip auth.caddy yapin. Hash uretmek icin:
+#   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'SIFRE'
+basic_auth {
+	admin $2a$14$BURAYA_HASH
+}
