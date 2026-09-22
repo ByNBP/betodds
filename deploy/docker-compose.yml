@@ -21,6 +21,9 @@ services:
     environment:
       # backend/env'deki socks5 adresini EZER: bos = dogrudan baglanti.
       BETODDS_PROXY: ""
+      # Gun sinirlari (Sonuclar'daki tarih suzgeci, "son gun") yerel saate
+      # gore hesaplaniyor; container varsayilani UTC -> gunler 03:00'te donerdi.
+      TZ: Europe/Istanbul
 
   caddy:
     image: caddy:2-alpine

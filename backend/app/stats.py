@@ -8,9 +8,11 @@ Node ile calistirip JSON'a ceviriyoruz (saf regex ile guvenli ayristirilamaz).
 import asyncio
 import json
 import shutil
+import time
 
 import httpx
 
+from . import db
 from .config import LANG, SITE, STATS_SITE, USER_AGENT
 from .http import new_async_client
 
@@ -127,6 +129,36 @@ async def season_page(tourney_id: int, iteration: int,
             "gf": _num(gf), "ga": _num(ga), "points": _num(r_.get("points")),
         })
     return {"table": table, "matches": _fixtures(rows)}
+
+
+async def store_season(tourney_id: int, iteration: int,
+                       champ_id: int | None = None) -> int:
+    """Sezon sayfasini cekip puan durumunu + sezon maclarini yazar.
+
+    INSERT OR REPLACE: suren bir sezon tekrar cekildiginde tablo guncellenir.
+    Bos tablo gelirse hata firlatir (sezon henuz baslamamis olabilir).
+    Kaydedilen sezon maci sayisini dondurur.
+    """
+    page = await season_page(tourney_id, iteration)
+    table = page["table"]
+    if not table:
+        raise StatsUnavailable("bos tablo")
+    now = int(time.time())
+    with db.session() as con:
+        con.executemany("""INSERT OR REPLACE INTO season_tables
+            (champ_id, tourney_id, iteration, team, pos, played, wins, draws,
+             losses, gf, ga, points, fetched_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            [(champ_id, tourney_id, iteration, r["team"], r["pos"], r["played"],
+              r["wins"], r["draws"], r["losses"], r["gf"], r["ga"],
+              r["points"], now) for r in table])
+        # Ayni sayfadan cikan capraz sonuc tablosu: sezonun tekil maclari.
+        con.executemany("""INSERT OR REPLACE INTO season_matches
+            (tourney_id, iteration, home, away, score_home, score_away, fetched_at)
+            VALUES (?,?,?,?,?,?,?)""",
+            [(tourney_id, iteration, m["home"], m["away"], m["score_home"],
+              m["score_away"], now) for m in page["matches"]])
+    return len(page["matches"])
 
 
 async def season_table(tourney_id: int, iteration: int,

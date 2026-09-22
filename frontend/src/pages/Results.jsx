@@ -33,13 +33,11 @@ const SIDES = [
 ]
 
 /* Hazir tarih araliklari. Geri sayim ARSIVIN SON GUNUNDEN yapiliyor,
-   takvimden bugunden degil: toplayici bir sure durmussa "son 7 gun" bombos
+   takvimden bugunden degil: toplayici bir sure durmussa "son gun" bombos
    cikardi. `days: 0` = tarih suzgeci yok. */
 const PRESETS = [
   { days: 0, label: 'Tümü' },
   { days: 1, label: 'Son gün' },
-  { days: 3, label: 'Son 3 gün' },
-  { days: 7, label: 'Son 7 gün' },
 ]
 
 const filterLabel = (key) => FILTERS.find((f) => f.key === key)?.label ?? 'Tümü'
@@ -59,6 +57,10 @@ export default function Results({ champ, leagues, onChamp }) {
   // her istekte data null'a dusuyor, span oradan okunsaydi tarih seridi
   // her tusta bir kaybolup gelirdi.
   const [span, setSpan] = useState(null)
+  // Sayfa SON GUNLE aciliyor: once arsivin son gunu soruluyor, liste ancak
+  // tarih kutulari dolduktan sonra cekiliyor - aksi halde tum arsiv bir
+  // kez bosuna yuklenirdi.
+  const [ready, setReady] = useState(false)
   const [odds, setOdds] = useState(EMPTY_ODDS)
   const [gap, setGap] = useState('0.25')
   const [teams, setTeams] = useState([])
@@ -99,6 +101,20 @@ export default function Results({ champ, leagues, onChamp }) {
   }, [champ])
 
   useEffect(() => {
+    if (ready) return
+    let alive = true
+    api.resultsSpan(champ ?? '')
+      .then((s) => {
+        if (!alive) return
+        if (s.last) { setSpan(s); setDateFrom(s.last); setDateTo(s.last) }
+        setReady(true)
+      })
+      .catch((e) => alive && setError(e.message))
+    return () => { alive = false }
+  }, [ready, champ])
+
+  useEffect(() => {
+    if (!ready) return
     let alive = true
     setData(null)
     // Yazarken her tusa istek atmayalim.
@@ -113,7 +129,7 @@ export default function Results({ champ, leagues, onChamp }) {
         .catch((e) => alive && setError(e.message))
     }, 250)
     return () => { alive = false; clearTimeout(t) }
-  }, [query, offset])
+  }, [query, offset, ready])
 
   /* PDF: ayri bir kutuphane YOK - filtrenin TUM satirlari cekilip yazdirma
      sayfasi olusturuluyor, tarayicinin yazdirma penceresinde hedef "PDF
@@ -322,7 +338,7 @@ export default function Results({ champ, leagues, onChamp }) {
 
         {!data ? <div className="empty">Yükleniyor…</div>
           : rows.length === 0 ? <div className="empty">Bu filtreye uyan maç yok.</div>
-          : <FinishedTable matches={rows} showDate mark />}
+          : <FinishedTable matches={rows} showDate mark favorite />}
       </div>
 
       {/* Sayfa numaralari: 50 sayfalik arsivde ileri/geri ile gezmek
@@ -359,7 +375,7 @@ export default function Results({ champ, leagues, onChamp }) {
               <span>{new Date().toLocaleString('tr-TR')}</span>
             </div>
           </div>
-          <FinishedTable matches={printRows} showDate mark />
+          <FinishedTable matches={printRows} showDate mark favorite />
         </div>
       )}
     </>

@@ -143,6 +143,8 @@ h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
 .badge.live { background: #3a1717; border-color: #6b2a2a; color: #ff9f9f; }
 .badge.arch { background: #17263a; border-color: #2a4a6b; color: #9fd0ff; }
 .badge.done { background: #1c2a1c; border-color: #2f4a2f; color: #a7dca7; }
+.badge.fav { background: #17263a; border-color: #2a4a6b; color: #9fd0ff; }
+.badge.surprise { background: #3a2e12; border-color: #6b5320; color: #fab219; }
 
 /* Son biten maclar tablosu - sayfanin tepesinde. Kompakt: bes satir ust
    uste duracagi icin kart yerine tablo, satirlar dar. */

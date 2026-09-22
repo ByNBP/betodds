@@ -2,6 +2,9 @@
  * Sonuclar sayfasinin tarih suzgeci ve numarali sayfalamasi - gercek render
  * ve gercek tiklamalar uzerinden.
  *
+ * Sayfa SON GUNLE aciliyor; sayfalama kontrolleri once "Tumu"ne basip tum
+ * arsivde yapiliyor.
+ *
  * Ikisi de yalnizca ETKILESIMDE ortaya cikiyor: ilk yukleme dogru gorunup
  * "3. sayfa" bambaska bir dilim getirebilir ya da suzgec degisince eski
  * sayfa numarasi yeni kumede askida kalabilir. smoke-routes.mjs sayfayi
@@ -47,11 +50,37 @@ let failed = 0
 const check = (n, ok, extra = '') => { console.log(`  ${ok ? '✓' : '✗'} ${n}${extra ? '  ' + extra : ''}`); if (!ok) failed++ }
 const click = async (el, ms = 1200) => { el.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); await wait(ms) }
 
+const totalOf = (s) => Number((s.match(/\/ (\d+) maç/) || [])[1])
+const preset = (l) => [...doc.querySelectorAll('.date-filter button')].find((b) => b.textContent.trim() === l)
+const headers = () => [...doc.querySelectorAll('table thead th')].map((th) => th.textContent.trim())
+
 await wait(3000)
-check('30 satır listeleniyor', rows() === 30, `satır:${rows()}`)
+// --- acilis: son gun ----------------------------------------------------
+const sonGun = preset('Son gün')
+const tumu = preset('Tümü')
 check('tarih kutuları var', doc.querySelectorAll('.date-filter input[type=date]').length === 2)
-check('hazır aralık butonları var', ['Tümü', 'Son gün', 'Son 3 gün', 'Son 7 gün']
-  .every((l) => [...doc.querySelectorAll('.date-filter button')].some((b) => b.textContent.trim() === l)))
+check('hazır aralıklar yalnızca Tümü + Son gün',
+  [...doc.querySelectorAll('.date-filter button')].map((b) => b.textContent.trim()).join('|') === 'Tümü|Son gün')
+check('açılışta "Son gün" işaretli', !!sonGun?.className.includes('primary'))
+check('açılışta özette tarih yazılı', /Tarih: \d\d\.\d\d\.\d{4}/.test(summary()), summary().slice(-40))
+const dayTotal = totalOf(summary())
+check('açılışta son günün maçları var', dayTotal > 0, `${dayTotal} maç`)
+check('Favori / Sürpriz sütunu var, En büyük üst yok',
+  headers().includes('Favori / Sürpriz') && !headers().includes('En büyük üst'))
+const hi = headers()
+check('Favori / Sürpriz, İlk tutan alt\'ın hemen önünde',
+  hi.indexOf('Favori / Sürpriz') + 1 === hi.indexOf('İlk tutan alt'))
+const favCells = [...doc.querySelectorAll('table tbody tr')].map((tr) =>
+  tr.children[hi.indexOf('Favori / Sürpriz')]?.textContent.trim())
+check('hücreler Favori/Sürpriz/Beraberlik/—',
+  favCells.length > 0 && favCells.every((t) => ['Favori', 'Sürpriz', 'Beraberlik', '—'].includes(t)),
+  [...new Set(favCells)].join(','))
+
+// --- Tumu: sayfalama tum arsivde ------------------------------------------
+await click(tumu, 4500)
+const allTotal = totalOf(summary())
+check('"Tümü" son günden geniş', allTotal > dayTotal, `${dayTotal} -> ${allTotal}`)
+check('30 satır listeleniyor', rows() === 30, `satır:${rows()}`)
 check('arşiv aralığı yazılı', /arşiv: \d\d\.\d\d\.\d{4} – \d\d\.\d\d\.\d{4}/.test(
   doc.querySelector('.date-filter')?.textContent || ''), doc.querySelector('.date-filter')?.textContent.match(/arşiv:.*/)?.[0])
 
@@ -65,7 +94,7 @@ check('sayfaya git kutusu var', !!doc.querySelector('.pager-jump input'))
 // --- 3. sayfaya dogrudan atla -------------------------------------------
 const first = head()
 const btn3 = [...doc.querySelectorAll('.pager button')].find((b) => b.textContent.trim() === '3')
-await click(btn3, 1500)
+await click(btn3, 4500)
 check('3. sayfaya atladı', doc.querySelector('.pager button.primary')?.textContent.trim() === '3')
 check('satırlar değişti', head() !== first && rows() === 30)
 check('özet 61–90 diyor', summary().startsWith('61–90'), summary().slice(0, 40))
@@ -76,36 +105,28 @@ const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype
 setter.call(jump, '12')
 jump.dispatchEvent(new window.Event('input', { bubbles: true }))
 await wait(60)
-await click(doc.querySelector('.pager-jump button[type=submit]'), 1500)
+await click(doc.querySelector('.pager-jump button[type=submit]'), 4500)
 check('12. sayfaya gitti', doc.querySelector('.pager button.primary')?.textContent.trim() === '12')
 check('özet 331–360 diyor', summary().startsWith('331–360'), summary().slice(0, 40))
 
 // --- tarih suzgeci -------------------------------------------------------
-const totalOf = (s) => Number((s.match(/\/ (\d+) maç/) || [])[1])
-const allTotal = totalOf(summary())
-const sonGun = [...doc.querySelectorAll('.date-filter button')].find((b) => b.textContent.trim() === 'Son gün')
 await click(sonGun, 1800)
-const dayTotal = totalOf(summary())
-check('son gün süzgeci daralttı', dayTotal > 0 && dayTotal < allTotal, `${allTotal} -> ${dayTotal}`)
+const dayTotal2 = totalOf(summary())
+// Toplayici calisiyor: arada yeni mac bitmis olabilir, azalmaz ama artabilir.
+check('son gün süzgeci daralttı', dayTotal2 >= dayTotal && dayTotal2 < allTotal, `${allTotal} -> ${dayTotal2}`)
 // Tek sayfa kaldiysa serit HIC cizilmez (Pager pages<=1'de null doner) -
 // gunun erken saatinde "son gun" 30'dan az mac verebiliyor, test o yuzden
 // iki durumu da kabul ediyor.
-const dayPages = Math.max(1, Math.ceil(dayTotal / 30))
+const dayPages = Math.max(1, Math.ceil(dayTotal2 / 30))
 check('süzgeç sonrası 1. sayfa',
   dayPages === 1 ? !doc.querySelector('.pager')
                  : doc.querySelector('.pager button.primary')?.textContent.trim() === '1',
-  `${dayTotal} maç -> ${dayPages} sayfa`)
+  `${dayTotal2} maç -> ${dayPages} sayfa`)
 check('"Son gün" işaretli', sonGun.className.includes('primary'))
 check('özette tarih yazılı', /Tarih: \d\d\.\d\d\.\d{4}/.test(summary()), summary().slice(-40))
 
-const son7 = [...doc.querySelectorAll('.date-filter button')].find((b) => b.textContent.trim() === 'Son 7 gün')
-await click(son7, 1800)
-const weekTotal = totalOf(summary())
-check('son 7 gün > son gün', weekTotal > dayTotal, `${dayTotal} -> ${weekTotal}`)
-
-const tumu = [...doc.querySelectorAll('.date-filter button')].find((b) => b.textContent.trim() === 'Tümü')
-await click(tumu, 1800)
-check('"Tümü" filtreyi kaldırdı', totalOf(summary()) === allTotal, `${weekTotal} -> ${totalOf(summary())}`)
+await click(tumu, 4500)
+check('"Tümü" filtreyi kaldırdı', totalOf(summary()) >= allTotal, `${dayTotal2} -> ${totalOf(summary())}`)
 
 check('konsol temiz', errors.length === 0, errors[0] ? errors[0].slice(0, 200) : '')
 console.log(failed ? `\n${failed} kontrol BASARISIZ` : '\nhepsi gecti')

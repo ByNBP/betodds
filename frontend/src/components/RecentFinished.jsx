@@ -11,7 +11,7 @@ export default function RecentFinished({ matches }) {
   return (
     <div className="panel scroll-x recent-finished">
       <h3>Son biten {matches.length} maç</h3>
-      <FinishedTable matches={matches} mark />
+      <FinishedTable matches={matches} mark favorite />
     </div>
   )
 }

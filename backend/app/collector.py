@@ -6,6 +6,9 @@ Her lig icin canli feed'i periyodik olarak cekip:
   * mac BASLAMADAN once tum market setini bir kez arsivler,
   * feed'den dusen / F=true olan maci bitmis olarak isaretler.
 
+Ayri, seyrek bir dongu de sezon puan durumlarini (eventsstat) guncel tutar:
+gecmis maclarin lig sirasi o maclarin OYNANDIGI sezonun tablosundan okunuyor.
+
 Mac oncesi arsiv kritik: site, mac bitince oranlari tamamen siliyor
 (GetGameZip skoru dondurur ama GE bos gelir), yani gecmis oran baska
 hicbir yerden geri alinamiyor.
@@ -18,6 +21,7 @@ from .config import (FINISH_GRACE_SECONDS, MISSING_TICKS_TO_FINISH, POLL_SECONDS
                      League, load_leagues)
 from .feed import FeedClient, _int, flatten_outcomes, parse_match
 from .markets import SKIP_GROUPS
+from .stats import store_season
 
 
 class Broadcaster:
@@ -61,6 +65,12 @@ PREKICKOFF_WINDOW = 180
 PHASE_OPEN = "prematch"        # ilk gorusteki set (sigorta)
 PHASE_REF = "prekickoff"       # referans set - baslangictan hemen once
 
+# Sezon puan durumlari: suren sezon ve bir onceki (yeni bitmis, son maclari
+# islenmemis olabilir) her turda yeniden cekilir; daha eskilerden eksik
+# olanlar SEASON_BACKFILL sezon geriye kadar tamamlanir.
+SEASON_REFRESH_SECONDS = 600
+SEASON_BACKFILL = 20
+
 
 class Collector:
     def __init__(self) -> None:
@@ -70,6 +80,7 @@ class Collector:
         self.last_error: str | None = None
         self.poll_count = 0
         self._task: asyncio.Task | None = None
+        self._season_task: asyncio.Task | None = None
 
     # ---------------------------------------------------------------- yasam
     async def start(self) -> None:
@@ -77,16 +88,19 @@ class Collector:
         self.reload_leagues()
         self.running = True
         self._task = asyncio.create_task(self._loop(), name="collector")
+        self._season_task = asyncio.create_task(self._season_loop(),
+                                                name="season-tables")
 
     async def stop(self) -> None:
         self.running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for task in (self._task, self._season_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._task = self._season_task = None
 
     def reload_leagues(self) -> None:
         self.leagues = [l for l in load_leagues() if l.enabled]
@@ -111,6 +125,47 @@ class Collector:
                 db.log("error", self.last_error)
             elapsed = time.time() - started
             await asyncio.sleep(max(1.0, POLL_SECONDS - elapsed))
+
+    async def _season_loop(self) -> None:
+        # Acilista oran toplayicisinin ilk turunu bekle: o daha onemli.
+        await asyncio.sleep(30)
+        while self.running:
+            try:
+                await self.sync_seasons()
+            except asyncio.CancelledError:
+                raise
+            except Exception as ex:                    # noqa: BLE001
+                db.log("error", f"sezon tablolari: {type(ex).__name__}: {ex}")
+            await asyncio.sleep(SEASON_REFRESH_SECONDS)
+
+    async def sync_seasons(self) -> int:
+        """Her ligin guncel + bir onceki sezonunu yeniler, eksikleri tamamlar."""
+        stored = 0
+        for league in self.leagues:
+            tid = league.extra.get("tourney_id")
+            if not tid:
+                continue
+            with db.session() as con:
+                current = con.execute(
+                    "SELECT MAX(iteration) FROM matches WHERE champ_id = ?",
+                    (league.champ_id,)).fetchone()[0]
+                have = {r[0] for r in con.execute(
+                    "SELECT DISTINCT iteration FROM season_tables WHERE tourney_id = ?",
+                    (tid,))}
+            if current is None:
+                continue
+            missing = [it for it in range(max(1, current - SEASON_BACKFILL), current - 1)
+                       if it not in have]
+            for it in missing + [current - 1, current]:
+                try:
+                    await store_season(tid, it, league.champ_id)
+                    stored += 1
+                except asyncio.CancelledError:
+                    raise
+                except Exception as ex:                # noqa: BLE001
+                    db.log("warn", f"sezon {tid}/{it}: {type(ex).__name__}: {ex}")
+                await asyncio.sleep(0.4)          # kaynagi yormayalim
+        return stored
 
     async def poll_once(self) -> dict:
         summary = {"leagues": 0, "matches": 0, "snapshots": 0, "finished": 0,

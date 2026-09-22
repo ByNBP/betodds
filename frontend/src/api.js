@@ -23,6 +23,7 @@ export const api = {
   coverage: (champId) => get('/coverage', { champ_id: champId }),
   matches: (params) => get('/matches', params),
   results: (params) => get('/results', params),
+  resultsSpan: (champId) => get('/results/span', { champ_id: champId }),
   matchStats: (params) => get('/matches/stats', params),
   match: (id) => get(`/matches/${id}`),
   odds: (id) => get(`/matches/${id}/odds`),

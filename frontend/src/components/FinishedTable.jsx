@@ -19,8 +19,25 @@ import { adjustText, fmtOdd, fmtDateTime, fmtTime } from '../format.js'
  *
  * Yesil tik: toplam gol beklentinin USTUNDE kalmis (beklenti alt sinir gibi
  * okunuyor - "en az bu kadar" bekleniyordu, oldu mu?).
+ *
+ * favorite=true (pano ozeti ve Sonuclar sayfasi): "En buyuk ust" yerine
+ * "Favori / Surpriz" sutunu gelir ve tutan alt'in onune konur.
  */
-export default function FinishedTable({ matches, showDate = false, mark = false }) {
+
+/* Baslangic orani dusuk olan taraf favori. Favori kazandiysa 'fav', oteki
+   taraf kazandiysa 'surprise'; beraberlikte 'draw'. Oranlar esitse ya da
+   eksikse favori yok -> null. */
+function favoriteResult(m) {
+  if (m.p1 == null || m.p2 == null || m.p1 === m.p2
+      || m.score_home == null || m.score_away == null) return null
+  if (m.score_home === m.score_away) return 'draw'
+  const homeFav = m.p1 < m.p2
+  const homeWon = m.score_home > m.score_away
+  return homeFav === homeWon ? 'fav' : 'surprise'
+}
+
+export default function FinishedTable({ matches, showDate = false, mark = false,
+                                        favorite = false }) {
   /* mark=true -> tutan yesil-kalin + tik, tutmayan kirmizi + carpi.
      Sonuclar sayfasi da canli ozet de bu modda; mark=false yalnizca
      isaretsiz bir tablo isteyen bir cagiran olursa diye duruyor.
@@ -43,12 +60,18 @@ export default function FinishedTable({ matches, showDate = false, mark = false 
           <th className="num">Skor</th><th className="num">Toplam</th>
           <th className="num" title="Ham beklentiden 0.5 çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">Beklenen</th>
           <th className="num">1</th><th className="num">X</th><th className="num">2</th>
+          {favorite && (
+            <th className="num" title="Başlangıç oranı düşük olan takım kazandıysa Favori, diğer takım kazandıysa Sürpriz">
+              Favori / Sürpriz</th>
+          )}
           <th className="num" title="Tutan Alt çizgilerin EN DÜŞÜĞÜ — toplama en yakın üst sınır">
             İlk tutan alt</th>
           <th className="num" title="Tutan Üst çizgilerin EN DÜŞÜĞÜ — merdivenin tabanı">
             İlk tutan üst</th>
-          <th className="num" title="Maçta açılan en yüksek Üst çizgisi (skordan bağımsız) — tuttuysa yeşil">
-            En büyük üst</th>
+          {!favorite && (
+            <th className="num" title="Maçta açılan en yüksek Üst çizgisi (skordan bağımsız) — tuttuysa yeşil">
+              En büyük üst</th>
+          )}
           <th className="num" title="Aynı oranla (ev/deplasman korunarak) oynanmış son maçların gol ortalamasından — tuttuysa yeşil">
             Oran gol</th>
         </tr>
@@ -60,6 +83,7 @@ export default function FinishedTable({ matches, showDate = false, mark = false 
           // diye isaretlenemez.
           const hasLines = m.book_over_last != null
           const topHit = m.total != null && hasLines && m.total > m.book_over_last
+          const fav = favorite ? favoriteResult(m) : null
           return (
             <tr key={m.event_id} className={m.expect_hit ? 'hit-row' : undefined}>
               {/* Disaridan ice aktarilan kayitlarda mac oncesi tam market
@@ -90,6 +114,14 @@ export default function FinishedTable({ matches, showDate = false, mark = false 
               <td className="num">{fmtOdd(m.p1)}</td>
               <td className="num">{fmtOdd(m.px)}</td>
               <td className="num">{fmtOdd(m.p2)}</td>
+              {favorite && (
+                <td className="num">
+                  {fav === 'fav' && <span className="badge fav">Favori</span>}
+                  {fav === 'surprise' && <span className="badge surprise">Sürpriz</span>}
+                  {fav === 'draw' && <span className="muted">Beraberlik</span>}
+                  {fav == null && '—'}
+                </td>
+              )}
               {/* Tutan iki uc: skora gore secilen, GERCEKTEN kazanmis en
                   dusuk Alt ve en dusuk Ust cizgileri, oranlariyla. Ikisi de
                   tanimi geregi tutmus - o yuzden ayrica yesille isaretlenmez,
@@ -109,12 +141,14 @@ export default function FinishedTable({ matches, showDate = false, mark = false 
               {/* Macta acilan en yuksek Ust cizgisi - skordan BAGIMSIZ, yani
                   tutmamis da olabilir. Merdivenin tavani, en uzun oran;
                   tuttuysa yesil + tik. */}
-              <td className={`num ${cls(topHit, hasLines)}`}>
-                {m.book_over_last ? <>Üst {m.book_over_last}
-                  <span className="muted"> @{fmtOdd(m.book_over_last_odd)}</span></> : '—'}
-                {sign(topHit, hasLines,
-                      'en büyük üst de tuttu', 'en büyük üst tutmadı')}
-              </td>
+              {!favorite && (
+                <td className={`num ${cls(topHit, hasLines)}`}>
+                  {m.book_over_last ? <>Üst {m.book_over_last}
+                    <span className="muted"> @{fmtOdd(m.book_over_last_odd)}</span></> : '—'}
+                  {sign(topHit, hasLines,
+                        'en büyük üst de tuttu', 'en büyük üst tutmadı')}
+                </td>
+              )}
               {/* Oran golu: bu macin fiyatiyla, ayni dizilisle oynanmis
                   ONCEKI maclarin gol ortalamasi (kalibre edilmis). Yaninda
                   kac mactan geldigi duruyor - 3 macla 20 mac ayni sey degil. */}

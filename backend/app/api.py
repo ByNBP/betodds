@@ -25,7 +25,7 @@ from .markets import (HIDDEN_GROUPS, LOST, MAIN_TYPES, OU_GROUP, OU_OVER,
                       OU_UNDER, WON, calibrate_total, goal_expectation,
                       group_label, outcome_label, settle)
 from .predict import Predictor, backtest, goal_prediction
-from .stats import StatsUnavailable, season_page
+from .stats import StatsUnavailable, store_season
 
 router = APIRouter(prefix="/api")
 
@@ -755,30 +755,10 @@ async def sync_seasons(tourney_id: int, start: int, end: int,
             skipped += 1
             continue
         try:
-            page = await season_page(tourney_id, it)
+            games += await store_season(tourney_id, it, champ_id)
         except (StatsUnavailable, Exception) as ex:    # noqa: BLE001
             failed.append({"iteration": it, "error": str(ex)[:120]})
             continue
-        table = page["table"]
-        if not table:
-            failed.append({"iteration": it, "error": "bos tablo"})
-            continue
-        now = int(time.time())
-        with db.session() as con:
-            con.executemany("""INSERT OR REPLACE INTO season_tables
-                (champ_id, tourney_id, iteration, team, pos, played, wins, draws,
-                 losses, gf, ga, points, fetched_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                [(champ_id, tourney_id, it, r["team"], r["pos"], r["played"],
-                  r["wins"], r["draws"], r["losses"], r["gf"], r["ga"],
-                  r["points"], now) for r in table])
-            # Ayni sayfadan cikan capraz sonuc tablosu: sezonun tekil maclari.
-            con.executemany("""INSERT OR REPLACE INTO season_matches
-                (tourney_id, iteration, home, away, score_home, score_away, fetched_at)
-                VALUES (?,?,?,?,?,?,?)""",
-                [(tourney_id, it, m["home"], m["away"], m["score_home"],
-                  m["score_away"], now) for m in page["matches"]])
-            games += len(page["matches"])
         added += 1
         await asyncio.sleep(0.4)          # kaynagi yormayalim
     return {"added": added, "skipped": skipped, "matches": games,
@@ -987,6 +967,14 @@ def _finished_span(champ_id: int | None) -> dict:
     day = lambda ts: datetime.date.fromtimestamp(ts).isoformat()  # noqa: E731
     return {"first": day(row["lo"]), "last": day(row["hi"])} if row and row["lo"] \
         else {"first": None, "last": None}
+
+
+@router.get("/results/span")
+def results_span(champ_id: int | None = None):
+    """Yalnizca arsivin ilk/son gunu. Sonuclar sayfasi acilista son gune
+    yaslanmak icin bunu soruyor - tum arsivi bir kez bosuna zenginlestirip
+    sonra tek gune daraltmasin."""
+    return _finished_span(champ_id)
 
 
 @router.get("/results")
@@ -1205,12 +1193,14 @@ def _decorate(rows: list[dict], home: str, by_iter: dict,
     for r in rows:
         r["total"] = r["score_home"] + r["score_away"]
         r.update(_hit_lines(totals.get(r["event_id"]) or {}, r["total"]))
-        it = r["iteration"] if r["iteration"] in by_iter else latest
-        table = by_iter.get(it) or {}
+        # Sira YALNIZCA macin oynandigi sezonun tablosundan. O sezonun tablosu
+        # yoksa (ya da macin sezonu bilinmiyorsa) bos kalir: baska bir sezonun
+        # sirasini gostermek gecmis maci bugunun tablosuyla okumak olurdu.
+        # Toplayici eksik sezonlari kendisi cekiyor (collector._season_loop).
+        table = by_iter.get(r["iteration"]) or {}
         r["home_pos"] = table.get(r["home"])
         r["away_pos"] = table.get(r["away"])
-        # Sira macin kendi sezonundan mi geldi, yoksa en son tablodan mi?
-        r["pos_current"] = bool(table) and r["iteration"] not in by_iter
+        r["pos_current"] = False
         # Onceki maclar iki dizilistede olabilir; ekranda su anki ev sahibinin
         # attigi gol hep ayni sutunda dursun.
         swapped = r["home"] != home
