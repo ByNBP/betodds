@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import Coverage from '../components/Coverage.jsx'
 import GoalStats from '../components/GoalStats.jsx'
+import FavCounts from '../components/FavCounts.jsx'
 import LeagueSwitch from '../components/LeagueSwitch.jsx'
 import { fmtDateTime, fmtOdd, scoreText, STATUS_LABEL } from '../format.js'
 import useTitle from '../useTitle.js'
@@ -100,6 +101,14 @@ export default function Archive({ champ, leagues, onChamp }) {
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      {/* Filtrenin tamami uzerinden (tablodaki ilk 200 degil); 'Arsivi olan'
+          secimi istemci tarafinda oldugu icin bu sayiya girmez - GoalStats ile ayni. */}
+      {stats?.favorite && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <FavCounts fav={stats.favorite} />
+        </div>
+      )}
 
       <GoalStats stats={stats} />
 

@@ -27,6 +27,26 @@ function Pos({ n, current, iteration }) {
   )
 }
 
+const pct = (v) => `%${Math.round(v * 100)}`
+
+/**
+ * Sag ust kose: kazanma olasiligi yuksek olan taraf. Olasilik modelin MAC
+ * ONCESI gol tahmininden (bkz. predict.outcome_probs); mac basladiktan sonra
+ * da degismez. Uc olasiligin tamami baslikta.
+ */
+function WinPick({ m }) {
+  const w = m.win
+  if (!w) return null
+  const team = w.pick === 'home' ? m.home : m.away
+  return (
+    <span className="win-pick"
+          title={`Maç öncesi tahmini kazanma olasılığı`
+            + ` · ${m.home} ${pct(w.home)} · beraberlik ${pct(w.draw)} · ${m.away} ${pct(w.away)}`}>
+      <span className="win-team">{team}</span> {pct(w[w.pick])}
+    </span>
+  )
+}
+
 export default function MatchCard({ m }) {
   const pending = m.score_home === null || m.score_home === undefined
   const when = startText(m)
@@ -46,6 +66,7 @@ export default function MatchCard({ m }) {
         {m.has_snapshot > 0 && (
           <span className="badge arch" title="Maç öncesi tüm marketler arşivlendi">arşiv</span>
         )}
+        <WinPick m={m} />
       </div>
 
       {/* Birden fazla lig izleniyor: hangi maca baktigi kart uzerinde belli olmali. */}

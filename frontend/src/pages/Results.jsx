@@ -5,9 +5,10 @@ import useTitle from '../useTitle.js'
 import FinishedTable from '../components/FinishedTable.jsx'
 import LeagueSwitch from '../components/LeagueSwitch.jsx'
 import HitRates from '../components/HitRates.jsx'
+import FavCounts from '../components/FavCounts.jsx'
 import Pager from '../components/Pager.jsx'
 
-const PAGE = 30
+const PAGE = 100
 // Disa aktarmada sunucudan tek seferde alinabilecek en buyuk sayfa (api le=200).
 const EXPORT_PAGE = 200
 const EMPTY_ODDS = { o1: '', ox: '', o2: '' }
@@ -311,6 +312,13 @@ export default function Results({ champ, leagues, onChamp }) {
           sorusunun cevabi burada. */}
       <HitRates rates={data?.rates} />
 
+      {/* Favori / surpriz kazanan: ayni kume (hit filtresinden once). */}
+      {data?.favorite && (
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <FavCounts fav={data.favorite} />
+        </div>
+      )}
+
       <div className="panel scroll-x" ref={listRef}>
         <div className="chart-head">
           <h2>Sonuçlar</h2>
@@ -364,6 +372,12 @@ export default function Results({ champ, leagues, onChamp }) {
               <span>{league ? league.name : 'Tüm ligler'}</span>
               {active.map((a) => <span key={a}>{a}</span>)}
               <span>Beklenti: {filterLabel(hit)}</span>
+              {data?.favorite && (
+                <span>
+                  Favori {data.favorite.favorite} · Sürpriz {data.favorite.surprise}
+                  {' '}· beraberlik {data.favorite.draw}
+                </span>
+              )}
               <span>{printRows.length} maç</span>
               {data?.avg_goals != null && <span>maç başı {data.avg_goals} gol</span>}
               {!hit && data?.counts && data.counts.hit + data.counts.miss > 0 && (

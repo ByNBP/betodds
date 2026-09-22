@@ -29,6 +29,7 @@ agirliklarla harmanlanir ve toplamla carpilir. Sabit bir ev sahibi avantaji
 EKLENMEZ - arsivde tersi olculdu (ev 3.37, deplasman 3.70 gol; n=43). Saha
 etkisi bunun yerine 'venue' bileseniyle takim bazinda olculur.
 """
+import math
 import statistics as st
 
 from .config import EXPECT_OFFSET, EXPECT_STEP
@@ -447,3 +448,34 @@ class Predictor:
                         "mae": round(st.mean(errs), 2) if errs else None,
                         "weight": self.weights.get(key, 0)}
         return out
+
+
+def _poisson(lam: float, n: int = 60) -> list[float]:
+    p = [math.exp(-lam)]
+    for k in range(1, n):
+        p.append(p[-1] * lam / k)
+    return p
+
+
+def outcome_probs(home: float, away: float) -> dict:
+    """Mac oncesi ev kazanir / beraberlik / deplasman kazanir olasiliklari.
+
+    Iki takimin golleri bagimsiz Poisson: ortalama = modelin ev/deplasman
+    gol tahmini.
+
+    Arsivde olculdu (lig basina son 700 mac, leave-one-out): favori %52
+    tutuyor, oranlardaki favori %51-52; Brier ve log-loss oranlarin ima
+    ettigi olasiliklarla neredeyse ayni. Yani model oranlardan belirgin
+    sekilde iyi degil - ekranda bir TAHMIN olarak sunuluyor.
+    """
+    ph, pa = _poisson(home), _poisson(away)
+    h = d = a = 0.0
+    for i, x in enumerate(ph):
+        for j, y in enumerate(pa):
+            if i > j:
+                h += x * y
+            elif i == j:
+                d += x * y
+            else:
+                a += x * y
+    return {"home": round(h, 3), "draw": round(d, 3), "away": round(a, 3)}

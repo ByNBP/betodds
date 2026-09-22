@@ -30,9 +30,11 @@ const TILES = [
     title: 'Kitabın açtığı en düşük Üst çizgisi — merdivenin tabanı, en kısa oranlı bacak' },
 ]
 
-export default function HitRates({ rates }) {
+export default function HitRates({ rates, keys }) {
   if (!rates) return null
-  const shown = TILES.filter((t) => rates[t.key]?.n > 0)
+  // keys: yalnizca bu olcutler (pano kutusu ikisini gosteriyor).
+  const shown = TILES.filter((t) => rates[t.key]?.n > 0
+    && (!keys || keys.includes(t.key)))
   if (!shown.length) return null
   return (
     <div className="tiles">

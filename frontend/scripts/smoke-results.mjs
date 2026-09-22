@@ -80,7 +80,7 @@ check('hücreler Favori/Sürpriz/Beraberlik/—',
 await click(tumu, 4500)
 const allTotal = totalOf(summary())
 check('"Tümü" son günden geniş', allTotal > dayTotal, `${dayTotal} -> ${allTotal}`)
-check('30 satır listeleniyor', rows() === 30, `satır:${rows()}`)
+check('100 satır listeleniyor', rows() === 100, `satır:${rows()}`)
 check('arşiv aralığı yazılı', /arşiv: \d\d\.\d\d\.\d{4} – \d\d\.\d\d\.\d{4}/.test(
   doc.querySelector('.date-filter')?.textContent || ''), doc.querySelector('.date-filter')?.textContent.match(/arşiv:.*/)?.[0])
 
@@ -96,18 +96,18 @@ const first = head()
 const btn3 = [...doc.querySelectorAll('.pager button')].find((b) => b.textContent.trim() === '3')
 await click(btn3, 4500)
 check('3. sayfaya atladı', doc.querySelector('.pager button.primary')?.textContent.trim() === '3')
-check('satırlar değişti', head() !== first && rows() === 30)
-check('özet 61–90 diyor', summary().startsWith('61–90'), summary().slice(0, 40))
+check('satırlar değişti', head() !== first && rows() === 100)
+check('özet 201–300 diyor', summary().startsWith('201–300'), summary().slice(0, 40))
 
 // --- sayfaya git kutusu --------------------------------------------------
 const jump = doc.querySelector('.pager-jump input')
 const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-setter.call(jump, '12')
+setter.call(jump, '5')
 jump.dispatchEvent(new window.Event('input', { bubbles: true }))
 await wait(60)
 await click(doc.querySelector('.pager-jump button[type=submit]'), 4500)
-check('12. sayfaya gitti', doc.querySelector('.pager button.primary')?.textContent.trim() === '12')
-check('özet 331–360 diyor', summary().startsWith('331–360'), summary().slice(0, 40))
+check('5. sayfaya gitti', doc.querySelector('.pager button.primary')?.textContent.trim() === '5')
+check('özet 401–500 diyor', summary().startsWith('401–500'), summary().slice(0, 40))
 
 // --- tarih suzgeci -------------------------------------------------------
 await click(sonGun, 1800)
@@ -115,9 +115,9 @@ const dayTotal2 = totalOf(summary())
 // Toplayici calisiyor: arada yeni mac bitmis olabilir, azalmaz ama artabilir.
 check('son gün süzgeci daralttı', dayTotal2 >= dayTotal && dayTotal2 < allTotal, `${allTotal} -> ${dayTotal2}`)
 // Tek sayfa kaldiysa serit HIC cizilmez (Pager pages<=1'de null doner) -
-// gunun erken saatinde "son gun" 30'dan az mac verebiliyor, test o yuzden
+// gunun erken saatinde "son gun" 100'den az mac verebiliyor, test o yuzden
 // iki durumu da kabul ediyor.
-const dayPages = Math.max(1, Math.ceil(dayTotal2 / 30))
+const dayPages = Math.max(1, Math.ceil(dayTotal2 / 100))
 check('süzgeç sonrası 1. sayfa',
   dayPages === 1 ? !doc.querySelector('.pager')
                  : doc.querySelector('.pager button.primary')?.textContent.trim() === '1',

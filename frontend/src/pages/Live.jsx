@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import GoalExpectation from '../components/GoalExpectation.jsx'
 import RecentFinished from '../components/RecentFinished.jsx'
+import DayRates from '../components/DayRates.jsx'
 import MatchHistory from '../components/MatchHistory.jsx'
 import SimilarMatches from '../components/SimilarMatches.jsx'
 import MatchCard from '../components/MatchCard.jsx'
@@ -47,39 +48,53 @@ export default function Live({ pulse, champ }) {
     </div>
   )
 
+  // Mac bolumleri: once devam eden, sonra yaklasan.
+  const sections = [
+    live.length > 0 && { title: `Devam eden (${live.length})`, list: live },
+    soon.length > 0 && { title: `Yaklaşan (${soon.length})`, list: soon },
+  ].filter(Boolean)
+
+  // Izgara (bkz. .live-layout): ust satirda solda son biten maclar, sagda son
+  // gunun tutma oranlari; altta solda maclar, sagda gol beklentisi + benzer
+  // maclar. Sag alt sutun ilk MAC KARTININ hizasindan baslar ve yapiskandir -
+  // uzun listede asagi inerken ozet gorunur kalsin. Dar ekranda hepsi alt alta.
   return (
     <>
-      <RecentFinished matches={data.recent_finished} />
-
-      {live.length > 0 && (
-        <>
-          <h2>Devam eden ({live.length})</h2>
-          {rows(live)}
-        </>
-      )}
-
-      {soon.length > 0 && (
-        <>
-          <h2 style={{ marginTop: live.length ? 24 : 0 }}>Yaklaşan ({soon.length})</h2>
-          {rows(soon)}
-        </>
-      )}
-
-      {data.live.length === 0 && (
-        <div className="panel">
-          <div className="empty">
-            Şu anda izlenen maç yok.<br />
-            <span className="muted">Toplayıcı çalışıyorsa yeni maçlar birkaç dakika içinde görünür.</span>
-          </div>
+      <div className="live-layout">
+        <div className="live-recent">
+          <RecentFinished matches={data.recent_finished} />
         </div>
-      )}
 
-      <div style={{ marginTop: 20 }}>
-        <GoalExpectation matches={data.live} />
-      </div>
+        <div className="live-rates">
+          <DayRates champ={champ} refresh={data.recent_finished?.[0]?.event_id} />
+        </div>
 
-      <div style={{ marginTop: 20 }}>
-        <SimilarMatches matches={data.live} />
+        {sections[0] && <h2 className="live-heading">{sections[0].title}</h2>}
+
+        <div className="live-main">
+          {sections.map((s, i) => (
+            <div key={s.title}>
+              {i > 0 && <h2 style={{ marginTop: 24 }}>{s.title}</h2>}
+              {rows(s.list)}
+            </div>
+          ))}
+
+          {data.live.length === 0 && (
+            <div className="panel">
+              <div className="empty">
+                Şu anda izlenen maç yok.<br />
+                <span className="muted">Toplayıcı çalışıyorsa yeni maçlar birkaç dakika içinde görünür.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <aside className="live-side">
+          <GoalExpectation matches={data.live} />
+          <div>
+            <SimilarMatches matches={data.live} />
+          </div>
+        </aside>
       </div>
 
       <div style={{ marginTop: 16 }}>

@@ -13,6 +13,14 @@ import useTitle from './useTitle.js'
 // hep bu degeri okur/yazar.
 const CHAMP_KEY = 'betodds.champ'
 
+const PAGES = {
+  sonuclar: { to: '/sonuclar', label: 'Sonuçlar' },
+  arsiv: { to: '/arsiv', label: 'Arşiv' },
+}
+// 2986291 = FC 5x5 Superlig, 2860561 = 3x3 Konferans (data/leagues.json).
+// Son eleman Arsiv olmali: listede olmayan ligler onun onune eklenir.
+const MENU_ORDER = [2986291, 'sonuclar', 2860561, 'arsiv']
+
 function storedChamp() {
   try {
     const v = localStorage.getItem(CHAMP_KEY)
@@ -83,6 +91,14 @@ export default function App() {
         : 'toplayıcı durdu'
 
   const league = leagues.find((l) => l.champ_id === champ) || null
+
+  // Ust menu sirasi: FC 5x5, Sonuclar, 3x3, Arsiv. MENU_ORDER'da olmayan
+  // bir lig eklenirse Arsiv'in onune duser.
+  const byId = new Map(leagues.map((l) => [l.champ_id, l]))
+  const known = MENU_ORDER.filter((x) => typeof x !== 'number' || byId.has(x))
+  const others = leagues.filter((l) => !MENU_ORDER.includes(l.champ_id))
+  const menu = [...known.slice(0, -1), ...others, known[known.length - 1]]
+    .map((x) => (typeof x === 'number' ? byId.get(x) : PAGES[x]))
   // Ligler yuklenmeden "/" hedefini bilemeyiz; kayitli lig varsa onu kullan.
   const home = champ != null ? `/lig/${champ}` : null
 
@@ -91,15 +107,16 @@ export default function App() {
       <header className="top">
         <div className="brand">Bet<span>Odds</span></div>
         <nav className="tabs">
-          {leagues.map((l) => (
-            <NavLink key={l.champ_id} to={`/lig/${l.champ_id}`}
+          {menu.map((item) => item.to ? (
+            <NavLink key={item.to} to={item.to}
+              className={({ isActive }) => isActive ? 'active' : ''}>{item.label}</NavLink>
+          ) : (
+            <NavLink key={item.champ_id} to={`/lig/${item.champ_id}`}
               className={({ isActive }) => isActive ? 'active' : ''}
-              title={l.name}>
-              {l.short_name || l.name || l.champ_id}
+              title={item.name}>
+              {item.short_name || item.name || item.champ_id}
             </NavLink>
           ))}
-          <NavLink to="/arsiv" className={({ isActive }) => isActive ? 'active' : ''}>Arşiv</NavLink>
-          <NavLink to="/sonuclar" className={({ isActive }) => isActive ? 'active' : ''}>Sonuçlar</NavLink>
         </nav>
 
         <div className="status">

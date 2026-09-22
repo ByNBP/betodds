@@ -24,7 +24,7 @@ from .config import (LIVE_MATCH_MINUTES, League, POLL_SECONDS,
 from .markets import (HIDDEN_GROUPS, LOST, MAIN_TYPES, OU_GROUP, OU_OVER,
                       OU_UNDER, WON, calibrate_total, goal_expectation,
                       group_label, outcome_label, settle)
-from .predict import Predictor, backtest, goal_prediction
+from .predict import Predictor, backtest, goal_prediction, outcome_probs
 from .stats import StatsUnavailable, store_season
 
 router = APIRouter(prefix="/api")
@@ -435,7 +435,7 @@ def matches_stats(champ_id: int | None = None, status: str | None = None,
     where, _select_args, args, _dist, _wanted = _match_filter(
         champ_id, status, team, o1, ox, o2, gap)
     rows = _rows(f"""
-        SELECT m.event_id, m.score_home, m.score_away
+        SELECT m.event_id, m.score_home, m.score_away, p.p1, p.p2
         FROM matches m LEFT JOIN ({LATEST_ODDS}) o ON o.event_id = m.event_id
                        LEFT JOIN ({PREMATCH_ODDS}) p ON p.event_id = m.event_id
         WHERE {where}""", tuple(args))
@@ -445,7 +445,8 @@ def matches_stats(champ_id: int | None = None, status: str | None = None,
     out = {"matches": len(rows), "scored": len(scored), "archived": 0,
            "goals": None, "under_first": [], "over_top": [],
            "under_first_avg": None, "over_top_avg": None,
-           "no_under": 0, "no_over": 0, "common_lines": []}
+           "no_under": 0, "no_over": 0, "common_lines": [],
+           "favorite": _fav_counts(scored)}
     if not scored:
         return out
 
@@ -923,6 +924,33 @@ def _rate(hits: int, n: int) -> dict:
     return {"hit": hits, "n": n, "pct": round(100 * hits / n, 1) if n else None}
 
 
+def _fav_counts(rows: list[dict]) -> dict:
+    """Biten maclarda favori mi, surpriz mi kazandi (tablodaki sutunla ayni
+    kural, bkz. FinishedTable.favoriteResult).
+
+    Favori = mac oncesi orani (p1/p2) dusuk olan taraf. Beraberlikte kazanan
+    yok; oranlar esit ya da eksikse favori belirlenemez ('unknown'). Yuzde
+    yalnizca kazanani olan maclar (favori + surpriz) uzerinden.
+    """
+    fav = surprise = draw = unknown = 0
+    for r in rows:
+        p1, p2 = r.get("p1"), r.get("p2")
+        sh, sa = r.get("score_home"), r.get("score_away")
+        if p1 is None or p2 is None or p1 == p2 or sh is None or sa is None:
+            unknown += 1
+        elif sh == sa:
+            draw += 1
+        elif (p1 < p2) == (sh > sa):
+            fav += 1
+        else:
+            surprise += 1
+    decided = fav + surprise
+    return {"favorite": fav, "surprise": surprise, "draw": draw,
+            "unknown": unknown,
+            "favorite_pct": round(100 * fav / decided, 1) if decided else None,
+            "surprise_pct": round(100 * surprise / decided, 1) if decided else None}
+
+
 def _hit_rates(scored: list[dict], counts: dict) -> dict:
     """Sonuclar sayfasindaki tutma oranlari.
 
@@ -1018,6 +1046,7 @@ def results(champ_id: int | None = None, hit: str | None = None,
         "miss": sum(1 for r in scored if not r["expect_hit"]),
         "no_expect": len(rows) - len(scored),
     }
+    favorite = _fav_counts(rows)
     if hit == "yes":
         rows = [r for r in scored if r["expect_hit"]]
     elif hit == "no":
@@ -1033,6 +1062,7 @@ def results(champ_id: int | None = None, hit: str | None = None,
         "hit": hit,
         "counts": counts,
         "rates": _hit_rates(scored, counts),
+        "favorite": favorite,
         "filters": {"team": team or "", "side": side or "", "opp": opp or "",
                     "date_from": date_from or "", "date_to": date_to or "",
                     "o1": o1, "ox": ox, "o2": o2, "gap": gap},
@@ -1105,6 +1135,7 @@ def dashboard(champ_id: int | None = None):
         ORDER BY m.start_ts ASC""", ca)
     _attach_expectations(live)
     _attach_predictions(live)
+    _attach_win(live)
     _attach_h2h(live)
     _attach_positions(live)
     _attach_match_minutes(live)
@@ -1612,6 +1643,24 @@ def _attach_predictions(rows: list[dict], pred: Predictor | None = None) -> None
         if model is None:
             model = cache[champ] = _predictor(champ)
         m["predict"] = model.predict(m, exclude=m["event_id"])
+
+
+def _attach_win(rows: list[dict]) -> None:
+    """Her maca kazanma olasiliklarini ekler (mac karti sag ust kose).
+
+    _attach_predictions'tan SONRA: modelin ev/deplasman gol tahminini
+    kullanir. Yalnizca MAC ONCESI tahmin - canli macta da skor ve kalan sure
+    hesaba katilmaz; kart baslamadan hemen onceki tahmini gostermeye devam
+    eder (oran beklentisi referans setten, bkz. _expectation_snapshot).
+    """
+    for m in rows:
+        p = m.get("predict") or {}
+        if p.get("home") is None or p.get("away") is None:
+            m["win"] = None
+            continue
+        probs = outcome_probs(p["home"], p["away"])
+        m["win"] = {**probs,
+                    "pick": "home" if probs["home"] >= probs["away"] else "away"}
 
 
 def _expectation_snapshot(event_id: int) -> dict | None:
