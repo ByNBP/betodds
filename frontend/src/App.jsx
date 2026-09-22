@@ -5,7 +5,8 @@ import { fmtTime } from './format.js'
 import Live from './pages/Live.jsx'
 import Archive from './pages/Archive.jsx'
 import MatchDetail from './pages/MatchDetail.jsx'
-import Stats from './pages/Stats.jsx'
+import Results from './pages/Results.jsx'
+import useTitle from './useTitle.js'
 
 // Secili lig tarayicida kalir. Uygulama genelinde TEK kaynak: gezinme
 // cubugundaki lig sekmeleri, Arsiv'deki lig anahtari ve Istatistik sayfasi
@@ -20,9 +21,12 @@ function storedChamp() {
 }
 
 /** /lig/:champId -> o ligin canli sayfasi. Secimi ust bilesene bildirir. */
-function LeaguePage({ pulse, onChamp }) {
+function LeaguePage({ pulse, onChamp, leagues }) {
   const { champId } = useParams()
   const champ = Number(champId)
+  // Sekme basligi ligin KISA adi: gezinme sekmesinde ne yaziyorsa o.
+  const league = leagues.find((l) => l.champ_id === champ) || null
+  useTitle(league ? (league.short_name || league.name) : null)
   useEffect(() => { if (champ) onChamp(champ) }, [champ, onChamp])
   return <Live pulse={pulse} champ={champ} />
 }
@@ -95,7 +99,7 @@ export default function App() {
             </NavLink>
           ))}
           <NavLink to="/arsiv" className={({ isActive }) => isActive ? 'active' : ''}>Arşiv</NavLink>
-          <NavLink to="/istatistik" className={({ isActive }) => isActive ? 'active' : ''}>İstatistik</NavLink>
+          <NavLink to="/sonuclar" className={({ isActive }) => isActive ? 'active' : ''}>Sonuçlar</NavLink>
         </nav>
 
         <div className="status">
@@ -115,12 +119,12 @@ export default function App() {
         <Route path="/" element={
           home ? <Navigate to={home} replace /> : <div className="empty">Yükleniyor…</div>} />
         <Route path="/lig/:champId"
-          element={<LeaguePage pulse={pulse} onChamp={setChamp} />} />
+          element={<LeaguePage pulse={pulse} onChamp={setChamp} leagues={leagues} />} />
         <Route path="/arsiv"
           element={<Archive champ={champ} leagues={leagues} onChamp={setChamp} />} />
         <Route path="/mac/:id" element={<MatchDetail pulse={pulse} />} />
-        <Route path="/istatistik"
-          element={<Stats champ={champ} tourneyId={league?.tourney_id ?? null} />} />
+        <Route path="/sonuclar"
+          element={<Results champ={champ} leagues={leagues} onChamp={setChamp} />} />
         <Route path="*" element={<div className="empty">Sayfa bulunamadı.</div>} />
       </Routes>
     </div>

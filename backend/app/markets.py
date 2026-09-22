@@ -4,6 +4,10 @@ Feed bu isimleri gondermiyor; asagidaki eslemeler canli veriden dogrulanarak
 cikarildi. Bilinmeyen kodlar ham haliyle gosterilir.
 """
 
+import math
+
+from .config import EXPECT_OFFSET, EXPECT_STEP
+
 GROUP_NAMES = {
     1: "Maç Sonucu",
     2: "Handikap",
@@ -150,6 +154,28 @@ def settle(g, t, p, home: int, away: int):
 TOTAL_GOALS_GROUP = 9939        # "Tam Toplam Gol": P dogrudan toplam gol sayisi
 SCORE_GROUP = 136               # "Kesin Skor": P = ev.deplasman kodlamasi
 OU_GROUP = 17                   # "Toplam Gol": Ust/Alt cizgileri
+
+# --- kullanilmayan pazarlar ---------------------------------------------
+# Hicbir sayfada gosterilmez. Ikisi (Tek/Cift, Golu Atan Takim) zaten final
+# skordan sonuclandirilamiyordu, biri (Grup 19) cozulemedi; kalanlar da
+# uygulamanin hicbir hesabina girmiyor.
+HIDDEN_GROUPS = frozenset({
+    2,      # Handikap
+    8,      # Çifte Şans
+    14,     # Tek/Çift
+    19,     # Grup 19 (çözülmedi)
+    20,     # Golü Atan Takım
+    SCORE_GROUP,        # Kesin Skor
+    TOTAL_GOALS_GROUP,  # Tam Toplam Gol
+})
+
+# Toplayicinin hic kaydetmedigi gruplar. Kesin Skor ve Tam Toplam Gol
+# HIDDEN_GROUPS'ta olmalarina ragmen kaydedilmeye devam ediyor: beklenen gol
+# hesabinin TEK girdisi onlar (seviye 9939'dan, ev/deplasman payi 136'dan).
+# Kaydi kesilirse beklenti - dolayisiyla Sonuclar'daki BEKLENEN sutunu,
+# Tuttu/Tutmadi suzgeci ve tutma orani kutulari - butun yeni maclarda boş
+# kalir. Gosterim ile kayit bu yuzden ayri iki liste.
+SKIP_GROUPS = HIDDEN_GROUPS - {SCORE_GROUP, TOTAL_GOALS_GROUP}
 OU_OVER, OU_UNDER = 9, 10       # (17,9)="Ust {p}", (17,10)="Alt {p}"
 
 
@@ -160,6 +186,35 @@ def _normalized(pairs):
     if not usable or book <= 0:
         return [], 0.0
     return [(v, (1 / c) / book) for v, c in usable], book
+
+
+def calibrate_total(x: float | None) -> float | None:
+    """Ham beklentiden EXPECT_OFFSET cikarip EN YAKIN KUCUK x.5'e yuvarlar.
+
+        10.17 -> (-0.5)  9.67 ->  9.5
+        14.20 -> (-0.5) 13.70 -> 13.5
+        14.60 -> (-0.5) 14.10 -> 13.5   (14.5 buyuk kalirdi)
+        15.00 -> (-0.5) 14.50 -> 14.5   (tam ustundeyse kendisi)
+
+    Yuvarlama AŞAĞI: hedef, degerin altinda kalan en buyuk x.5'tir. Tam
+    sayilara hic yuvarlanmaz - kitabin Toplam Gol cizgileri her zaman x.5
+    oldugu icin beklenti de bir cizgiye denk gelmeli (bkz. config.EXPECT_STEP).
+
+    "En yakina" degil "asagiya" yuvarlanmasinin sonucu: beklenti bir ALT
+    SINIR gibi okunuyor ve gercek toplamin onu asmasi daha kolay. Uygulama
+    zaten "toplam > beklenti mi" diye soruyor.
+
+    Kural tahminin CIKISINA uygulanir, girdilerine degil (bkz. config).
+    En dusuk cizginin altina inmez: negatif gol beklentisi anlamsiz olurdu.
+    """
+    if x is None:
+        return None
+    if EXPECT_STEP <= 0:
+        return round(x - EXPECT_OFFSET, 2)
+    half = EXPECT_STEP / 2
+    # Degerin ALTINDAKI en buyuk izgara orta noktasi (k*STEP + half).
+    v = math.floor((x - EXPECT_OFFSET - half) / EXPECT_STEP) * EXPECT_STEP + half
+    return round(max(v, half), 2)
 
 
 def goal_expectation(values, detail: bool = False):
@@ -186,11 +241,17 @@ def goal_expectation(values, detail: bool = False):
     dist, book = _normalized(totals)
     if not dist:
         return None
-    total = sum(p * q for p, q in dist)
+    raw = sum(p * q for p, q in dist)
+    # Gosterilen ve kullanilan deger KALIBRE olandir; 'total_raw' islemin
+    # ekranda gosterilebilmesi ve harmanin ham girdiyle calismasi icin durur.
+    total = calibrate_total(raw)
     top_goals, top_prob = max(dist, key=lambda x: x[1])
 
-    out = {"total": round(total, 2),
+    out = {"total": total,
+           "total_raw": round(raw, 2),
+           "adjust": {"offset": EXPECT_OFFSET, "step": EXPECT_STEP},
            "home": None, "away": None,
+           "home_raw": None, "away_raw": None,
            "top_total": int(top_goals), "top_prob": round(100 * top_prob, 1),
            "margin": round((book - 1) * 100, 1),
            "line": None, "line_over": None, "line_under": None}
@@ -203,7 +264,10 @@ def goal_expectation(values, detail: bool = False):
             ou.setdefault(v["p"], {})[v["t"]] = v["coef"]
     both = [p for p, side in ou.items() if OU_OVER in side and OU_UNDER in side]
     if both:
-        line = min(both, key=lambda p: (abs(p - total), p))
+        # Cizgi KALIBRE beklentiye gore secilir: ekranda gosterilen sayi
+        # hangisiyse en yakin cizgi de ona gore olmali.
+        pick = total if total is not None else raw
+        line = min(both, key=lambda p: (abs(p - pick), p))
         out["line"] = line
         out["line_over"] = ou[line][OU_OVER]
         out["line_under"] = ou[line][OU_UNDER]
@@ -217,12 +281,18 @@ def goal_expectation(values, detail: bool = False):
         ea = sum(round((p - int(p)) * 1000) * q for p, q in sdist)
         if eh + ea > 0:
             share = eh / (eh + ea)
-            out["home"] = round(total * share, 2)
-            out["away"] = round(total * (1 - share), 2)
+            # Pay kesin skor marketinden; SEVIYE kalibre edilmis toplamdan.
+            # Ham ayrisim harmanin girdisi oldugu icin ayrica saklaniyor.
+            out["home"] = round(total * share, 2) if total is not None else None
+            out["away"] = round(total * (1 - share), 2) if total is not None else None
+            out["home_raw"] = round(raw * share, 2)
+            out["away_raw"] = round(raw * (1 - share), 2)
 
     if detail:
+        # Kirilim HAM beklentiyi anlatir ("market ne diyor"); kalibrasyon
+        # ondan sonra gelen ayri bir adim ve ustte 'adjust' ile veriliyor.
         out["detail"] = _expectation_detail(
-            dist, book, total, dict(totals),
+            dist, book, raw, dict(totals),
             sdist, sbook, dict(scores), eh, ea, share,
             ou, both, out["line"])
     return out

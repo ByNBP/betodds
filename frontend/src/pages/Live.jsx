@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import GoalDistribution from '../components/GoalDistribution.jsx'
 import GoalExpectation from '../components/GoalExpectation.jsx'
+import RecentFinished from '../components/RecentFinished.jsx'
+import MatchHistory from '../components/MatchHistory.jsx'
 import SimilarMatches from '../components/SimilarMatches.jsx'
 import MatchCard from '../components/MatchCard.jsx'
+import Tactics from '../components/Tactics.jsx'
 import SeasonTrend from '../components/SeasonTrend.jsx'
 import StatTiles from '../components/StatTiles.jsx'
 
@@ -27,21 +29,39 @@ export default function Live({ pulse, champ }) {
   const live = data.live.filter((m) => m.status === 'live')
   const soon = data.live.filter((m) => m.status === 'scheduled')
 
+  // Maclar alt alta: her satirda solda kart, saginda o eslesmenin gecmisi.
+  // Yan yana dizilmis kartlarda gecmis kutusuna yer kalmiyordu.
+  const rows = (list) => (
+    <div className="match-rows">
+      {list.map((m) => (
+        <div className="match-row" key={m.event_id}>
+          {/* Sol sutun: kart, altinda taktik kutusu. Kart <Link> oldugu icin
+              taktik onun ICINE konamaz - tiklaninca mac detayina giderdi. */}
+          <div className="match-left">
+            <MatchCard m={m} />
+            <Tactics m={m} />
+          </div>
+          <MatchHistory h2h={m.h2h} home={m.home} away={m.away} expect={m.expect} />
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <>
-      <StatTiles data={data} />
+      <RecentFinished matches={data.recent_finished} />
 
       {live.length > 0 && (
         <>
           <h2>Devam eden ({live.length})</h2>
-          <div className="cards">{live.map((m) => <MatchCard key={m.event_id} m={m} />)}</div>
+          {rows(live)}
         </>
       )}
 
       {soon.length > 0 && (
         <>
           <h2 style={{ marginTop: live.length ? 24 : 0 }}>Yaklaşan ({soon.length})</h2>
-          <div className="cards">{soon.map((m) => <MatchCard key={m.event_id} m={m} />)}</div>
+          {rows(soon)}
         </>
       )}
 
@@ -54,9 +74,8 @@ export default function Live({ pulse, champ }) {
         </div>
       )}
 
-      <div className="grid-2" style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 20 }}>
         <GoalExpectation matches={data.live} />
-        <GoalDistribution dist={data.goal_distribution} />
       </div>
 
       <div style={{ marginTop: 20 }}>
@@ -66,6 +85,13 @@ export default function Live({ pulse, champ }) {
       <div style={{ marginTop: 16 }}>
         <SeasonTrend trends={data.season_trends} />
       </div>
+
+      {/* Sayac seridi sayfanin ALTINDA: bunlar durum bilgisi, gun icinde
+          degismeyen sayilar. Ustte dururken ilk ekranin dortte birini
+          yiyor ve asil is olan mac kartlarini asagi itiyordu. */}
+      <footer className="page-footer">
+        <StatTiles data={data} />
+      </footer>
     </>
   )
 }

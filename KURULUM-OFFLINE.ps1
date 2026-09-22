@@ -63,33 +63,65 @@ if (-not $Native) {
     }
 }
 
+# Docker calisiyor olsa bile paket imajsiz uretilmis olabilir (yerel yol
+# hicbir sey gerektirmediginden imajlari tasimak sart degil). Eskiden bu
+# durumda kurulum HATA verip duruyordu; artik sessizce yerel yola gecer.
+if ($useDocker) {
+    $haveTars = @(Get-ChildItem 'images' -File -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -match '\.tar$' })
+    if (-not $haveTars) {
+        Say '  Pakette hazir imaj yok; yerel kurulum kullanilacak.'
+        $useDocker = $false
+    }
+}
+
 if ($useDocker) {
     Head '[1/2] Hazir imajlar yukleniyor'
     $tars = @(Get-ChildItem 'images' -File -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -match '\.tar$' })
     if (-not $tars) { Fail 'images\*.tar bulunamadi. -Native ile yerel kurulumu deneyin.' }
+    # 'docker load' ciktisi yuklenen imajin adini veriyor; etiketi ondan
+    # kuruyoruz. DIKKAT: podman ile uretilen tar'lar "localhost/" onekli gelir
+    # ve compose oneksiz adi bekliyor.
+    $loaded = @()
     foreach ($t in $tars) {
         Say "  $($t.Name) ($([math]::Round($t.Length/1MB)) MB)..."
-        if ((Invoke-Live docker @('load', '-i', $t.FullName)) -ne 0) {
+        $out = & docker load -i $t.FullName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $out | ForEach-Object { Write-Host "    $_" }
             Fail "imaj yuklenemedi: $($t.Name)"
         }
+        $loaded += ($out | Select-String -Pattern 'Loaded image(?:\(s\))?:\s*(.+)$' |
+                    ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() })
     }
-    # podman ile uretilen imajlar "localhost/" onekiyle gelir; compose'un
-    # bekledigi ada etiketliyoruz.
+
+    # Etiketleme HER KURULUMDA yapilir. Onceden "betodds:latest zaten var mi"
+    # diye bakiliyordu; ikinci kurulumda eski etiket duruyor oldugu icin yeni
+    # yuklenen imaj etiketlenmiyor ve compose ESKI imaji baslatiyordu - Windows
+    # tarafinda "proje eski haliyle goruntuleniyor" sikayetinin sebebi buydu.
     foreach ($want in @('betodds:latest', 'betodds-proxy:latest')) {
-        & docker image inspect $want *> $null
-        if ($LASTEXITCODE -ne 0) {
+        $src = $loaded | Where-Object { ($_ -replace '^.*/', '') -eq $want } |
+               Select-Object -First 1
+        if (-not $src) {
+            # tar icinde ad yoksa (eski docker surumu ciktiyi farkli basar)
+            # imaj listesine duseriz.
             $all = (& docker images --format '{{.Repository}}:{{.Tag}}') -split "`n"
-            $m = $all | ForEach-Object { $_.Trim() } |
-                 Where-Object { $_ -and ($_ -replace '^.*/', '') -eq $want } |
-                 Select-Object -First 1
-            if ($m) { Say "  $m -> $want"; & docker tag $m $want }
-            else { Fail "$want imaji yuklenemedi." }
+            $src = $all | ForEach-Object { $_.Trim() } |
+                   Where-Object { $_ -and ($_ -replace '^.*/', '') -eq $want -and $_ -ne $want } |
+                   Select-Object -First 1
+        }
+        if ($src -and $src -ne $want) { Say "  $src -> $want"; & docker tag $src $want }
+        elseif (-not $src) {
+            & docker image inspect $want *> $null
+            if ($LASTEXITCODE -ne 0) { Fail "$want imaji yuklenemedi." }
         }
     }
 
     Head '[2/2] Calistiriliyor'
-    if ((Invoke-Live docker @('compose', 'up', '-d', '--no-build')) -ne 0) {
+    # --force-recreate: onceki kurulumdan kalan konteyner eski imajla ayakta
+    # olabilir; imaj degisse de compose onu oldugu gibi birakabiliyor.
+    if ((Invoke-Live docker @('compose', 'up', '-d', '--no-build',
+                              '--force-recreate')) -ne 0) {
         Fail 'docker compose baslatilamadi.'
     }
     Say '  Konteynerler ayakta.' 'Green'

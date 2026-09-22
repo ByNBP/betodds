@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
+import useTitle from '../useTitle.js'
 import { fmtDateTime, fmtOdd, impliedPct, scoreText, STATUS_LABEL } from '../format.js'
 import MarketGroups from '../components/MarketGroups.jsx'
-import OddsChart from '../components/OddsChart.jsx'
 import ExpectationBreakdown from '../components/ExpectationBreakdown.jsx'
 import SimilarOddsMatches from '../components/SimilarOddsMatches.jsx'
 import PredictionBreakdown from '../components/PredictionBreakdown.jsx'
@@ -15,6 +15,8 @@ export default function MatchDetail({ pulse }) {
   const [oddsError, setOddsError] = useState(null)
   const [ticks, setTicks] = useState([])
   const [error, setError] = useState(null)
+  // Mac yuklenene kadar baslik dokunulmadan kalir (bkz. useTitle).
+  useTitle(match ? `${match.home} – ${match.away}` : null)
 
   useEffect(() => {
     let alive = true
@@ -77,11 +79,6 @@ export default function MatchDetail({ pulse }) {
       <ExpectationBreakdown expect={match.expect} />
 
       <SimilarOddsMatches match={match} />
-
-      <div className="panel">
-        <h2>Oran hareketi</h2>
-        <OddsChart ticks={ticks} />
-      </div>
 
       {odds?.settled && (
         <div className="panel">

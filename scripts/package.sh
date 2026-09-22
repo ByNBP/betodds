@@ -33,16 +33,24 @@ OUT="${ARGS[0]:-$HOME/betodds-$(date +%Y%m%d-%H%M).zip}"
 # Cevrimdisi paketin ise yaramasi icin vendor/ altindaki Windows ikilileri
 # sart; bunlar depoda tutulmuyor (bkz. .gitignore). Eksikse kurulum hedef
 # makinede patlardi - burada, paketlemeden ONCE soyleyelim.
-if [ "$WITH_IMAGES" = 1 ]; then
-  missing=()
-  compgen -G "vendor/python/*embed-amd64.zip" >/dev/null || missing+=("vendor/python")
-  compgen -G "vendor/node/*.zip"              >/dev/null || missing+=("vendor/node")
-  compgen -G "vendor/wheels/*.whl"            >/dev/null || missing+=("vendor/wheels")
-  if [ ${#missing[@]} -gt 0 ]; then
+#
+# Kontrol --with-images'tan BAGIMSIZ: gomulu Python + wheel'ler her paket
+# icine giriyor ve KURULUM-OFFLINE.bat'in YEREL yolu yalnizca onlara
+# dayaniyor. Docker imajlari sadece konteyner yolu icin gerekli.
+missing=()
+compgen -G "vendor/python/*embed-amd64.zip" >/dev/null || missing+=("vendor/python")
+compgen -G "vendor/node/*.zip"              >/dev/null || missing+=("vendor/node")
+compgen -G "vendor/wheels/*.whl"            >/dev/null || missing+=("vendor/wheels")
+OFFLINE_OK=1
+if [ ${#missing[@]} -gt 0 ]; then
+  OFFLINE_OK=0
+  if [ "$WITH_IMAGES" = 1 ]; then
     echo "HATA: cevrimdisi paket icin eksik: ${missing[*]}" >&2
     echo "  once calistirin: ./scripts/vendor-indir.sh" >&2
     exit 1
   fi
+  echo "UYARI: eksik: ${missing[*]} - paket cevrimdisi kurulamayacak" >&2
+  echo "  cevrimdisi paket icin: ./scripts/vendor-indir.sh" >&2
 fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -70,6 +78,9 @@ done
 # vendor/byedpi Linux derleme ciktilari pakete girmesin (Windows'ta ise
 # yaramaz; Windows ikilisi vendor/byedpi-win icinde geliyor).
 rm -f "$STAGE"/vendor/byedpi/*.o "$STAGE"/vendor/byedpi/ciadpi
+# Linux paketine ait varliklar da girmesin: manylinux wheel'leri (~33 MB) ve
+# glibc ikilisi Windows'ta tamamen olu agirlik.
+rm -rf "$STAGE"/vendor/wheels-linux "$STAGE"/vendor/byedpi-linux-*
 # __pycache__ bu makinenin Python surumune ait (.pyc etiketli); tasinmasi
 # gereksiz.
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
@@ -150,9 +161,13 @@ esac
 echo
 echo "-> $OUT  ($(du -h "$OUT" | cut -f1))"
 echo
-if [ "$WITH_IMAGES" = 1 ]; then
+if [ "$OFFLINE_OK" = 1 ]; then
   BAT=KURULUM-OFFLINE.bat
-  NOTE="(hicbir sey indirmez; Python/Node/imajlar paketin icinde)"
+  if [ "$WITH_IMAGES" = 1 ]; then
+    NOTE="(hicbir sey indirmez; Python/Node/imajlar paketin icinde)"
+  else
+    NOTE="(hicbir sey indirmez; gomulu Python ile yerel kurulum)"
+  fi
 else
   BAT=KURULUM.bat
   NOTE="(her seyi indirir, derler, calistirir ve tarayiciyi acar)"
@@ -161,10 +176,8 @@ echo "   Windows:"
 echo "     1. $(basename "$OUT") dosyasini sag tik -> Tumunu ayikla"
 echo "     2. Olusan betodds klasorunde $BAT dosyasina cift tiklayin"
 echo "        $NOTE"
+if [ "$OFFLINE_OK" = 1 ] && [ "$WITH_IMAGES" = 0 ]; then
+  echo "     Docker yolu icin imajlar gerekir: --with-images ile paketleyin."
+fi
 echo
-case "$OUT" in
-  *.zip) EXTRACT="unzip $(basename "$OUT")" ;;
-  *)     EXTRACT="tar xzf $(basename "$OUT")" ;;
-esac
-echo "   Linux/macOS:"
-echo "     $EXTRACT && cd betodds && ./scripts/setup.sh"
+echo "   Linux: ayri paket - ./scripts/paket-linux.sh (bkz. LINUX-README.md)"

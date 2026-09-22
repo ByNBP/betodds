@@ -6,9 +6,21 @@ import { fmtDateTime, fmtOdd } from '../format.js'
 /**
  * "Bu maca benzeyen gecmis maclarda kac gol geldi?"
  *
- * Benzerlik: baslangic (mac oncesi) 1 ve 2 oranlarinin her ikisi de +/-gap
- * icinde. Tahmin = o maclarin toplam gol ORTALAMASI. Ornegin tamami asagida
- * tek tek listeleniyor - sayinin nereden geldigi gorunur olsun diye.
+ * Ornek kumesi iki kosulla daraliyor:
+ *   1) TARAF KORUNARAK takim eslesmesi - ev sahibimiz o macta da evde, ya da
+ *      deplasmanimiz orada da deplasmanda (ev sahipligi gol uretimini
+ *      degistirdigi icin takimi ters tarafta gormek ayni durum sayilmiyor),
+ *   2) baslangic (mac oncesi) 1 ve 2 oranlarinin her ikisi de +/-gap icinde.
+ * Kalanlardan oran uzakligina gore en yakin N tanesi alinir (bkz.
+ * config.SIMILAR_SAMPLE_LIMIT). Tahmin = o maclarin toplam gol ORTALAMASI.
+ * Ornegin tamami asagida tek tek listeleniyor - sayinin nereden geldigi
+ * gorunur olsun diye; kesme ortalamadan ONCE yapiliyor ki tablodaki satirlar
+ * ile alt satirdaki ortalama ayni kumeyi anlatsin.
+ *
+ * Havuz son sezonlarla sinirli (config.PREDICT_POOL_SEASONS): sanal ligde
+ * sezonlar birkac gunde donuyor, eski sezonlar guncel gol profilini tarif
+ * etmiyor. Sinir HAVUZA konuyor, listeye degil - ortalama neyin ustunden
+ * alindiysa tabloda o gorunsun.
  *
  * Berabere ayagi benzerlige katilmaz (bkz. backend/app/predict.py).
  */
@@ -16,11 +28,12 @@ import { fmtDateTime, fmtOdd } from '../format.js'
 const num = (v, d = 2) => (v === null || v === undefined ? '—' : Number(v).toFixed(d))
 
 export default function SimilarOddsMatches({ match }) {
-  const [gap, setGap] = useState('0.50')
+  // Varsayilan backend'deki SIMILAR_GAP ile ayni tutulmali.
+  const [gap, setGap] = useState('0.05')
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
-  const g = Number(gap) > 0 ? gap : '0.50'
+  const g = Number(gap) > 0 ? gap : '0.05'
 
   useEffect(() => {
     if (!match?.event_id) return
@@ -51,7 +64,16 @@ export default function SimilarOddsMatches({ match }) {
       <div className="chart-head"><h2>Benzer oranlı maçlar</h2></div>
       <div className="chart-sub">
         başlangıç oranı 1 {fmtOdd(data.p1)} · 2 {fmtOdd(data.p2)} — her ikisi de
-        ±{g} içinde kalan biten maçlar · {p.pool} maçlık arşivden {p.n} tanesi
+        ±{g} içinde kalan biten maçlar · <strong>{data.home}</strong> evinde ya da{' '}
+        <strong>{data.away}</strong> deplasmanda oynadığı {p.pool} maçtan{' '}
+        {p.n_all ?? p.n} tanesi
+        {/* Kesme oldugunda sebebi yaziyor: alttaki tabloda neden 50 satir
+            oldugu ve ortalamanin neyin uzerinden alindigi belli olmali. */}
+        {p.n_all > p.n ? ` · en yakın ${p.n} tanesi kullanıldı` : ''}
+        {/* Havuz son sezonlarla sinirli; "arsiv" derken nesi kastedildigi
+            yazmazsa {p.pool} sayisi acikta kalir. */}
+        {p.seasons?.length ? ` · son ${p.seasons.length} sezon `
+          + `(${p.seasons[p.seasons.length - 1]}–${p.seasons[0]})` : ''}
       </div>
 
       <div className="controls odds-filter" style={{ margin: '12px 0 4px' }}>
@@ -63,7 +85,8 @@ export default function SimilarOddsMatches({ match }) {
 
       {p.n === 0 ? (
         <div className="empty">
-          Bu orana ±{g} yakınlıkta, skoru bilinen biten maç yok. Pencereyi genişletin.
+          {data.home} evinde ya da {data.away} deplasmanda, bu orana ±{g}
+          yakınlıkta oynanmış biten maç yok. Pencereyi genişletin.
         </div>
       ) : (
         <>

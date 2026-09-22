@@ -12,6 +12,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/*.db.bak-*
+data/*.db.bozuk-*
 
 # Hazir docker imajlari (~295 MB) - `docker build` ile uretilir,
 # bkz. scripts/package.sh basindaki not.
@@ -25,3 +26,9 @@ images/*.tar.gz
 vendor/python/
 vendor/node/
 vendor/wheels/
+
+# Cevrimdisi Linux paketi icin indirilen wheel'ler (~33 MB, cp310-cp313).
+# `scripts/vendor-indir-linux.sh` yeniden getirir. Hazir ciadpi ikilisi de
+# uretilebilir oldugu icin depoda tutulmuyor (paket.sh gerekirse derler).
+vendor/wheels-linux/
+vendor/byedpi-linux-*/

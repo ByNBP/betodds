@@ -27,21 +27,38 @@ if command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -q ":$PORT "; then
   exit 0
 fi
 
+# Hazir ikili pakete dahil (vendor/byedpi-linux-x86_64/ciadpi). Once
+# derlemeyi deniyoruz: yerelde derlenen ikili hedefin glibc'sine uyar,
+# hazir olan ise derlendigi surumden (GLIBC_2.34) eskisinde calismaz.
+PREBUILT="vendor/byedpi-linux-$(uname -m)/ciadpi"
+
 if [ ! -x "$BIN" ]; then
-  echo "-> ciadpi derleniyor ($BUILD)..."
-  mkdir -p "$BUILD"
-  cp -r vendor/byedpi/. "$BUILD/"
-  # Derleyici uyarilari (kavl.h) normal; hata olursa cikti tekrar gosterilir.
-  make -C "$BUILD" >/dev/null 2>&1 || { make -C "$BUILD"; exit 1; }
+  if command -v make >/dev/null && command -v cc >/dev/null; then
+    echo "-> ciadpi derleniyor ($BUILD)..."
+    mkdir -p "$BUILD"
+    cp -r vendor/byedpi/. "$BUILD/"
+    # Derleyici uyarilari (kavl.h) normal; hata olursa cikti tekrar gosterilir.
+    make -C "$BUILD" >/dev/null 2>&1 || { make -C "$BUILD"; exit 1; }
+  elif [ -x "$PREBUILT" ]; then
+    echo "-> derleyici yok; pakete dahil hazir ikili kullaniliyor."
+    mkdir -p "$BUILD"
+    cp "$PREBUILT" "$BIN"
+  else
+    echo "HATA: ciadpi ne derlenebiliyor ne de hazir ikili var." >&2
+    echo "  derleyici kurun (Debian/Ubuntu: apt install build-essential)" >&2
+    exit 1
+  fi
 fi
 
+mkdir -p logs
 # shellcheck disable=SC2086
-nohup "$BIN" -i 127.0.0.1 -p "$PORT" $ARGS >/tmp/ciadpi.log 2>&1 &
+nohup "$BIN" -i 127.0.0.1 -p "$PORT" $ARGS >>logs/proxy.log 2>&1 &
+echo $! > logs/proxy.pid
 sleep 1
 
 if command -v ss >/dev/null && ! ss -ltn 2>/dev/null | grep -q ":$PORT "; then
-  echo "HATA: proxy baslamadi. /tmp/ciadpi.log:"
-  tail -20 /tmp/ciadpi.log
+  echo "HATA: proxy baslamadi. logs/proxy.log:"
+  tail -20 logs/proxy.log
   exit 1
 fi
 echo "-> proxy hazir: socks5://127.0.0.1:$PORT  (strateji: $ARGS)"

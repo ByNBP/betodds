@@ -5,10 +5,12 @@ import Coverage from '../components/Coverage.jsx'
 import GoalStats from '../components/GoalStats.jsx'
 import LeagueSwitch from '../components/LeagueSwitch.jsx'
 import { fmtDateTime, fmtOdd, scoreText, STATUS_LABEL } from '../format.js'
+import useTitle from '../useTitle.js'
 
 const EMPTY_ODDS = { o1: '', ox: '', o2: '' }
 
 export default function Archive({ champ, leagues, onChamp }) {
+  useTitle('Arşiv')
   // Arsiv tek sayfa oldugu icin lig anahtari SAYFA ICINDE. Anahtar uygulama
   // genelindeki secimi degistirir (basliktaki lig adi ve Istatistik sayfasi
   // da onu izler) - iki ayri lig durumu tutmak, hangisinin gecerli oldugunu
@@ -113,8 +115,10 @@ export default function Archive({ champ, leagues, onChamp }) {
                 <th className="num" title="Maç öncesi (kickoff) oranı">X</th>
                 <th className="num" title="Maç öncesi (kickoff) oranı">2</th>
                 {oddsOn && <th className="num" title="Girilen oranlara toplam uzaklık">Fark</th>}
-                <th title="Toplam golü geçen en düşük alt çizgisi">İlk alt</th>
-                <th title="Tutan üst çizgilerinin en yükseği">En üst</th>
+                <th title="Kitabın açtığı en düşük Alt çizgisi (skordan bağımsız)">İlk alt</th>
+                <th title="Kitabın açtığı en yüksek Üst çizgisi (skordan bağımsız)">Son üst</th>
+                <th title="Toplam golü geçen en düşük alt çizgisi">Tutan alt</th>
+                <th title="Tutan üst çizgilerinin en yükseği">Tutan üst</th>
                 <th>Arşiv</th>
               </tr>
             </thead>
@@ -135,6 +139,13 @@ export default function Archive({ champ, leagues, onChamp }) {
                         ? '—' : m.odds_dist.toFixed(2)}
                     </td>
                   )}
+                  {/* Kitabin uclari skora bakmaz: yaklasan maclarda da dolu. */}
+                  <td>{m.book_under_first
+                    ? <>Alt {m.book_under_first} <span className="muted">@{fmtOdd(m.book_under_first_odd)}</span></>
+                    : <span className="muted">—</span>}</td>
+                  <td>{m.book_over_last
+                    ? <>Üst {m.book_over_last} <span className="muted">@{fmtOdd(m.book_over_last_odd)}</span></>
+                    : <span className="muted">—</span>}</td>
                   <td>{m.under_first
                     ? <>Alt {m.under_first} <span className="muted">@{fmtOdd(m.under_first_odd)}</span></>
                     : <span className="muted">—</span>}</td>

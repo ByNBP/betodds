@@ -2,7 +2,7 @@
 /**
  * "Tahmin nasil olustu" paneli.
  *
- * Dort bilesen, agirliklari ve her birinin arsivde tek basina olculen isabeti
+ * Bes bilesen, agirliklari ve her birinin arsivde tek basina olculen isabeti
  * yan yana. Amac: tek bir sayiya bakip guvenmek yerine, o sayinin hangi
  * etmenden ne kadar geldigini ve o etmenin gecmiste ne kadar tuttugunu
  * gorebilmek.
@@ -17,7 +17,7 @@ export default function PredictionBreakdown({ predict, expect }) {
   const comps = predict.components || {}
   const acc = predict.accuracy
   const cacc = predict.component_accuracy || {}
-  const order = ['season', 'odds', 'form', 'similar']
+  const order = ['season', 'odds', 'form', 'similar', 'venue']
   const season = comps.season?.detail
   const form = comps.form?.detail
 
@@ -25,7 +25,7 @@ export default function PredictionBreakdown({ predict, expect }) {
     <div className="panel" id="tahmin">
       <div className="chart-head"><h2>Tahmin nasıl oluştu</h2></div>
       <div className="chart-sub">
-        dört etmenin ağırlıklı harmanı · ağırlıklar arşiv üzerinde ölçülerek seçildi ·
+beş etmenin ağırlıklı harmanı · çarpanlar elle ayarlandı ·
         üretilemeyen etmenin ağırlığı kalanlara oransal dağıtılır
       </div>
 

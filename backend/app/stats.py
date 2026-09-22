@@ -68,9 +68,48 @@ def _num(v) -> int:
         return 0
 
 
-async def season_table(tourney_id: int, iteration: int,
-                       game: str = "fifa") -> list[dict]:
-    """Bir sezonun puan durumunu dondurur."""
+def _fixtures(rows: list[dict]) -> list[dict]:
+    """Capraz sonuc tablosunu tekil maclara acar.
+
+    Her satirin 'positions' dizisi: [takim adi, sonuc_1, sonuc_2, ...] - indis
+    j, siralamada num=j olan takimi gosterir. Hucre "3:5" bicimindedir ve
+    SATIR TAKIMI EVDEDIR. Dogrulama: her takimin hucrelerinden cikan ev+
+    deplasman gol toplami, puan durumundaki averaji birebir veriyor
+    (PSG 89-61 ev + 83-72 deplasman = 172-133).
+
+    Takimin kendisine denk gelen hucre bos gelir; oynanmamis eslesmeler de
+    bos olabilir - ikisi de atlanir.
+    """
+    name = {_num(r.get("num")): (r.get("title") or "") for r in rows}
+    out = []
+    for r in rows:
+        home = r.get("title") or ""
+        pos = r.get("positions") or []
+        if not home or not isinstance(pos, list):
+            continue
+        for j, cell in enumerate(pos):
+            if j == 0 or not isinstance(cell, str) or ":" not in cell:
+                continue
+            away = name.get(j)
+            if not away or away == home:
+                continue
+            sh, _, sa = cell.partition(":")
+            try:
+                out.append({"home": home, "away": away,
+                            "score_home": int(sh.strip()),
+                            "score_away": int(sa.strip())})
+            except ValueError:
+                continue
+    return out
+
+
+async def season_page(tourney_id: int, iteration: int,
+                      game: str = "fifa") -> dict:
+    """Bir sezonun puan durumu + o sezonun tum maclari.
+
+    Ikisi de AYNI sayfadan cikiyor; ayri istek atmak kaynagi bos yere iki kez
+    yormak olurdu.
+    """
     url = f"{STATS_SITE}/{LANG}/statisticpopup/cyber/{game}/{tourney_id}/{iteration}"
     async with new_async_client() as c:
         r = await c.get(url, headers={"User-Agent": USER_AGENT,
@@ -87,4 +126,10 @@ async def season_table(tourney_id: int, iteration: int,
             "draws": _num(r_.get("draws")), "losses": _num(r_.get("losses")),
             "gf": _num(gf), "ga": _num(ga), "points": _num(r_.get("points")),
         })
-    return table
+    return {"table": table, "matches": _fixtures(rows)}
+
+
+async def season_table(tourney_id: int, iteration: int,
+                       game: str = "fifa") -> list[dict]:
+    """Yalnizca puan durumu (geriye donuk uyumluluk)."""
+    return (await season_page(tourney_id, iteration, game))["table"]

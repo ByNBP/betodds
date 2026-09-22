@@ -11,6 +11,9 @@ Bilesenler (her biri tek basina bir 'toplam gol' tahmini uretir):
           takim lig ortalamasina cekilir (buzusme).
   similar Baslangic oranlari (1 ve 2 ayagi) bu maca +/-gap yakin olan BITEN
           maclarin gol ortalamasi.
+  venue   Saha bazli form: ev sahibinin YALNIZCA ev maclarindaki, deplasmanin
+          YALNIZCA deplasman maclarindaki uretimi. 'form' bileseni iki sahayi
+          birlikte sayar; bu ayrimi gormek icin ayri bir etmen.
 
 Agirliklar arsiv uzerinde leave-one-out olculerek secildi; olculen degerler
 config.PREDICT_WEIGHTS aciklamasinda. Bir bilesen o mac icin uretilemezse
@@ -22,10 +25,14 @@ icin karsilastirmaya uygun degil (bkz. api.PREMATCH_ODDS). Berabere ayagi (px)
 benzerlige KATILMAZ: bu ligde X, 1/2'den neredeyse tamamen turetilebiliyor.
 
 Ev/deplasman ayrimi: her bilesen kendi ev PAYINI verir, paylar ayni
-agirliklarla harmanlanir ve toplamla carpilir. Ev sahibi avantaji EKLENMEZ -
-arsivde tersi olculdu (ev 3.37, deplasman 3.70 gol; n=43).
+agirliklarla harmanlanir ve toplamla carpilir. Sabit bir ev sahibi avantaji
+EKLENMEZ - arsivde tersi olculdu (ev 3.37, deplasman 3.70 gol; n=43). Saha
+etkisi bunun yerine 'venue' bileseniyle takim bazinda olculur.
 """
 import statistics as st
+
+from .config import EXPECT_OFFSET, EXPECT_STEP
+from .markets import calibrate_total
 
 
 def _agg(vals):
@@ -59,12 +66,18 @@ def similar(p1, p2, pool, gap, exclude=None):
     return out
 
 
-def goal_prediction(p1, p2, pool, gap, exclude=None, detail=False):
+def goal_prediction(p1, p2, pool, gap, exclude=None, detail=False, limit=None):
     """Benzer oranli maclarin gol ortalamasi.
 
     Tahmin = ornekteki maclarin toplam gol ORTALAMASI. Agirliklandirma yok:
     hangi macin sayildigi ekranda tek tek gorulebilsin diye kasitli olarak
     seffaf tutuldu.
+
+    limit verilirse yalnizca EN YAKIN o kadar ornek sayilir. Kesme
+    ortalamadan ONCE yapilir: ekranda listelenen maclar ile ortalamanin
+    dayandigi maclar ayni kume olmali, aksi halde tablonun alt satirindaki
+    ortalama tablodaki satirlardan hesaplanamaz gorunurdu.
+    'n_all' kesilmeden onceki eslesme sayisidir.
 
     n kucukse ortalama gurultuludur; 'n' her zaman sonuca konur ve arayuz onu
     gizlemez. Ornek bulunamazsa n=0 doner (uydurulmus bir sayi degil).
@@ -72,10 +85,15 @@ def goal_prediction(p1, p2, pool, gap, exclude=None, detail=False):
     if p1 is None or p2 is None:
         return None
     sample = similar(p1, p2, pool, gap, exclude)
+    n_all = len(sample)
+    if limit is not None:
+        sample = sample[:limit]
     out = {
         "gap": gap,
         "ref": {"p1": p1, "p2": p2},
         "n": len(sample),
+        "n_all": n_all,
+        "limit": limit,
         "total": None, "home": None, "away": None,
         "median": None, "min": None, "max": None, "stdev": None,
     }
@@ -236,12 +254,57 @@ def form_component(home, away, pool, k, exclude=None):
     }
 
 
+def venue_component(home, away, pool, k, exclude=None):
+    """Saha bazli form: ev sahibi EVDE, deplasman DEPLASMANDA ne uretiyor.
+
+    'form' bileseninden farki, her takimin yalnizca ilgili sahadaki maclarini
+    saymasi. Buzusme de saha bazli: az ev maci oynamis takim lig EV
+    ortalamasina, az deplasman maci oynamis takim lig DEPLASMAN ortalamasina
+    cekilir - bu ligde ikisi ayni degil (arsivde ev 3.37, deplasman 3.70).
+    """
+    rest = [r for r in pool if exclude is None or r["event_id"] != exclude]
+    if not rest:
+        return None
+    mu_h = st.mean([r["score_home"] for r in rest])   # lig ev ortalamasi
+    mu_a = st.mean([r["score_away"] for r in rest])   # lig deplasman ortalamasi
+
+    def rate(team, at_home):
+        """(attigi, yedigi, mac sayisi) - yalnizca ilgili sahadaki maclardan."""
+        sc, cd = [], []
+        for r in rest:
+            if at_home and r["home"] == team:
+                sc.append(r["score_home"]); cd.append(r["score_away"])
+            elif not at_home and r["away"] == team:
+                sc.append(r["score_away"]); cd.append(r["score_home"])
+        own, opp = (mu_h, mu_a) if at_home else (mu_a, mu_h)
+        if not sc:
+            return own, opp, 0
+        w = len(sc) / (len(sc) + k)
+        return (w * st.mean(sc) + (1 - w) * own,
+                w * st.mean(cd) + (1 - w) * opp, len(sc))
+
+    ah, dh, nh = rate(home, True)     # ev sahibi, ev maclari
+    aa, da, na = rate(away, False)    # deplasman, deplasman maclari
+    if not nh and not na:
+        return None                   # iki takim da hic oynamamis: bilgi yok
+    lh, la = (ah + da) / 2, (aa + dh) / 2
+    return {
+        "total": round(lh + la, 2), "home": round(lh, 2), "away": round(la, 2),
+        "detail": {"home_played": nh, "away_played": na,
+                   "league_home_avg": round(mu_h, 2), "league_away_avg": round(mu_a, 2),
+                   "home_scored": round(ah, 2), "home_conceded": round(dh, 2),
+                   "away_scored": round(aa, 2), "away_conceded": round(da, 2),
+                   "shrink_k": k},
+    }
+
+
 # ==========================================================================
 #  Harman
 # ==========================================================================
 
 LABELS = {"odds": "Oran beklentisi", "season": "Sezon gücü",
-          "form": "Form (arşiv)", "similar": "Benzer oranlı maçlar"}
+          "form": "Form (arşiv)", "similar": "Benzer oranlı maçlar",
+          "venue": "Saha etkisi (ev/dep.)"}
 
 
 def blend(components, weights):
@@ -268,10 +331,14 @@ def blend(components, weights):
     if shares:
         sw = sum(eff[k] for k in shares)
         share = sum(eff[k] * shares[k] for k in shares) / sw
+    # Kalibrasyon TEK noktada, harmanin cikisinda: bilesenler ham calisir.
+    cal = calibrate_total(total)
     return {
-        "total": round(total, 2),
-        "home": round(total * share, 2) if share is not None else None,
-        "away": round(total * (1 - share), 2) if share is not None else None,
+        "total": cal,
+        "total_raw": round(total, 2),
+        "adjust": {"offset": EXPECT_OFFSET, "step": EXPECT_STEP},
+        "home": round(cal * share, 2) if share is not None and cal is not None else None,
+        "away": round(cal * (1 - share), 2) if share is not None and cal is not None else None,
         "home_share": round(100 * share, 1) if share is not None else None,
         "effective_weights": {k: round(v, 3) for k, v in eff.items()},
     }
@@ -293,8 +360,14 @@ class Predictor:
 
     def components(self, match, exclude=None, detail=False):
         exp = match.get("expect") or {}
-        odds = ({"total": exp["total"], "home": exp.get("home"),
-                 "away": exp.get("away")} if exp.get("total") is not None else None)
+        # HAM beklenti: kalibrasyon (bkz. markets.calibrate_total) harmanin
+        # CIKISINDA uygulaniyor. Kalibre degeri girdi yaparsak duzeltme once
+        # bilesene, sonra harmana inip iki kat olurdu.
+        raw = exp.get("total_raw", exp.get("total"))
+        odds = ({"total": raw,
+                 "home": exp.get("home_raw", exp.get("home")),
+                 "away": exp.get("away_raw", exp.get("away"))}
+                if raw is not None else None)
         sim = goal_prediction(match.get("p1"), match.get("p2"), self.pool,
                               self.gap, exclude=exclude, detail=detail)
         if sim and sim.get("total") is None:
@@ -306,6 +379,8 @@ class Predictor:
             "form": form_component(match.get("home"), match.get("away"),
                                    self.pool, self.form_k, exclude=exclude),
             "similar": sim,
+            "venue": venue_component(match.get("home"), match.get("away"),
+                                     self.pool, self.form_k, exclude=exclude),
         }
 
     def predict(self, match, exclude=None, detail=False):

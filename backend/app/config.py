@@ -52,35 +52,95 @@ COUNTRY = int(os.environ.get("BETODDS_COUNTRY", "1"))
 # 1 dakika, macin ortasinda kalan gol beklentisini ~%10 kaydiriyor.
 LIVE_MATCH_MINUTES = float(os.environ.get("BETODDS_MATCH_MINUTES", "11"))
 
+# --- beklenen gol kalibrasyonu ----------------------------------------
+# Ham beklenti (market ya da harman) once EXPECT_OFFSET kadar dusurulur,
+# sonra ALTINDA kalan en buyuk x.5'e yuvarlanir: 10.17 -> 9.67 -> 9.5,
+# 14.60 -> 14.10 -> 13.5.
+#
+# Yuvarlama tam sayilara DEGIL yalnizca yarimlara yapiliyor: kitabin actigi
+# Toplam Gol cizgileri her zaman x.5 (Alt 11.5, Ust 12.5). "14.0" gibi bir
+# beklenti hicbir cizgiye karsilik gelmiyor, dolayisiyla "beklenti su cizgiyi
+# gecti mi" sorusu da yarim kaliyordu.
+#
+# EXPECT_STEP izgaranin ARALIGI; hedefler izgaranin ORTA noktalaridir
+# (k*STEP + STEP/2). STEP=1.0 -> 0.5, 1.5, 2.5 ... yani x.5 degerleri.
+# Yuvarlama bu noktalara AŞAĞI dogru yapilir, en yakinina degil.
+# 0 ya da negatif verilirse yuvarlama tamamen kapanir, yalnizca offset iner.
+#
+# Kural TAHMININ CIKISINA uygulanir, girdilerine degil: harmanin bilesenleri
+# ham degerlerle calisir, aksi halde hem bilesene hem harmana uygulanip
+# duzeltme iki kez inerdi.
+EXPECT_OFFSET = float(os.environ.get("BETODDS_EXPECT_OFFSET", "0.5"))
+EXPECT_STEP = float(os.environ.get("BETODDS_EXPECT_STEP", "1.0"))
+
 # ----------------------------------------------------------------- tahmin
-# app/predict.py: dort bilesenin agirlikli harmani.
+# app/predict.py: bes bilesenin agirlikli harmani.
 #
-# Agirliklar arsiv uzerinde leave-one-out olculerek secildi (n=47).
+# BU AGIRLIKLAR ELLE AYARLANDI (2026-09-04). Asagidaki MAE degerleri, dort
+# bilesenli onceki surumde leave-one-out ile OLCULEN degerlerdir; yeni
+# agirliklar bir taramanin sonucu DEGIL, tercihtir. Isabetin ne oldugunu
+# gormek icin mac detay sayfasindaki "Tahmin nasil olustu" panelinde
+# bilesen basina ve harman geneli hata canli hesaplaniyor.
 #
-# Etmenler TEK BASINA (MAE):
+# Etmenler TEK BASINA olculen hata (MAE, n=47, dort bilesenli surum):
 #   sezon gucu          1.65      <- tek basina en iyi
 #   oran beklentisi     1.67
 #   form (arsiv)        1.77
 #   arsiv ortalamasi    1.93      (hicbir sey kullanmayan taban)
 #   benzer oranli mac   2.17      <- tabandan BILE kotu
+#   saha etkisi         -         (yeni bilesen, henuz olculmedi)
 #
-# Dort etmen de aktif olacak sekilde taranan en iyi harman:
-#   oran .40 sezon .45 form .10 benzer .05   MAE 1.736   <- varsayilan
-# Karsilastirma:
-#   benzer'siz (oran .4 sezon .4 form .2)    MAE 1.730
-#   benzer .10                               MAE 1.761
-#   benzer .25                               MAE 1.818
-#   esit dortlu (.25 x4)                     MAE 1.835
-#
-# MAE'nin standart hatasi ~0.17: yukaridaki farklarin hicbiri istatistiksel
-# olarak anlamli degil. 'similar' agirligi arttikca isabet duzenli olarak
-# kotulesiyor, bu yuzden taramanin verdigi dusuk degerde birakildi.
+# Onceki varsayilan: oran .40 sezon .45 form .10 benzer .05 -> MAE 1.736.
+# 'benzer' agirligi o taramada arttikca isabet duzenli olarak kotulesiyordu
+# (.10 -> 1.761, .25 -> 1.818); simdi .25 verildi. MAE'nin standart hatasi
+# ~0.17 oldugu icin bu farklarin hicbiri istatistiksel olarak anlamli degil,
+# ama beklenti yonu bu.
 PREDICT_WEIGHTS = {
-    "odds":    float(os.environ.get("BETODDS_W_ODDS", "0.40")),
-    "season":  float(os.environ.get("BETODDS_W_SEASON", "0.45")),
-    "form":    float(os.environ.get("BETODDS_W_FORM", "0.10")),
-    "similar": float(os.environ.get("BETODDS_W_SIMILAR", "0.05")),
+    "odds":    float(os.environ.get("BETODDS_W_ODDS", "0.20")),
+    "season":  float(os.environ.get("BETODDS_W_SEASON", "0.25")),
+    "form":    float(os.environ.get("BETODDS_W_FORM", "0.15")),
+    "similar": float(os.environ.get("BETODDS_W_SIMILAR", "0.25")),
+    # Saha bazli form: ev sahibi evde, deplasman deplasmanda ne uretiyor.
+    "venue":   float(os.environ.get("BETODDS_W_VENUE", "0.15")),
 }
+
+# Mac kartinin yanindaki "ayni oranli maclar" kutusu. Bir mac, bu macin iki
+# takimindan YALNIZCA biri o macta oynadiysa, o takimin oradaki orani
+# buradakine bu kadar yakinsa VE 1/X/2 ayaklarindan en az SAME_ODDS_MIN_LEGS
+# tanesi bu kadar yakinsa listeye girer.
+SAME_ODDS_GAP = float(os.environ.get("BETODDS_SAME_ODDS_GAP", "0.02"))
+# Tutmasi gereken ayak sayisi (1/X/2 uzerinden). Takimin kendi ayagi zaten
+# sart oldugu icin 2 demek "kendi ayagi + en az bir tane daha" demek.
+SAME_ODDS_MIN_LEGS = int(os.environ.get("BETODDS_SAME_ODDS_MIN_LEGS", "2"))
+# Liste en yakin tarihli bu kadar macla sinirli.
+SAME_ODDS_LIMIT = int(os.environ.get("BETODDS_SAME_ODDS_LIMIT", "5"))
+
+# --- oran golu ---------------------------------------------------------
+# "Bu oranla oynanmis maclarda kac gol oluyor?" Aday mac, EV/DEPLASMAN
+# KONUMLARI KORUNARAK bu macin oranlarina yakin fiyatlanmis olmali: ev ayagi
+# ev ayagiyla, deplasman ayagi deplasman ayagiyla karsilastirilir. (Takim
+# bazli 'ayni oranli maclar' kutusundan farki bu - orada takim hangi tarafta
+# olursa olsun kendi ayagindan okunuyor.)
+#
+# Tolerans olcumu (mevcut arsiv, macin KENDINDEN ONCEKI maclari):
+#   ±0.02 -> ort.  3-6 ornek, maclarin %12-21'inde hic ornek yok
+#   ±0.05 -> ort. 10-13 ornek, %5-7'sinde yok
+#   ±0.10 -> ort. 14-16 ornek, %4'unde yok
+# Varsayilan "ayni oran" tanimiyla ayni (SAME_ODDS_GAP): dar tutuluyor,
+# cunku genisledikce "ayni oranli mac" baska fiyatli bir mac olmaya basliyor.
+ODDS_GOAL_GAP = float(os.environ.get("BETODDS_ODDS_GOAL_GAP", str(SAME_ODDS_GAP)))
+# Ortalamaya girecek EN FAZLA mac (en yeniden geriye).
+ODDS_GOAL_LIMIT = int(os.environ.get("BETODDS_ODDS_GOAL_LIMIT", "20"))
+# Bunlardan ekranda ornek olarak listelenecek mac sayisi.
+ODDS_GOAL_SAMPLES = int(os.environ.get("BETODDS_ODDS_GOAL_SAMPLES", "5"))
+
+# Karsilasma gecmisi kutusunda gosterilecek sezon sayisi (eventsstat capraz
+# sonuc tablosundan). Bizim arsivimiz yalnizca birkac gunu kapsiyor; gecmis
+# sezonlar tek kaynak.
+H2H_SEASONS = int(os.environ.get("BETODDS_H2H_SEASONS", "4"))
+
+# Sayfanin tepesinde ozetlenen son biten mac sayisi.
+RECENT_FINISHED_LIMIT = int(os.environ.get("BETODDS_RECENT_FINISHED", "5"))
 
 # 'similar' bileseni: baslangic oranlarinin (1 ve 2 ayagi) bu araliktaki
 # BITEN maclari ornek kabul edilir. Genis pencere ornek sayisini artirir ama
@@ -91,6 +151,27 @@ PREDICT_GAP = float(os.environ.get("BETODDS_PREDICT_GAP", "0.50"))
 # Tarama: n_prev=10 & w_cur=0.2 -> MAE 1.646; w_cur=1.0 -> 1.823 (guncel
 # sezon tek basina az mac oynanmis oldugu icin gurultulu).
 PREDICT_SEASONS = int(os.environ.get("BETODDS_PREDICT_SEASONS", "10"))
+
+# 'similar' havuzu kac sezon geriye baksin. Sanal ligde sezonlar hizli
+# donuyor (birkac gunde bir iteration atliyor); eski sezonlarin maclari
+# guncel gol profilini artik tarif etmiyor. Sezonu BILINMEYEN maclar havuza
+# girmez: son 4 sezonun icinde olduklarini soyleyemeyiz.
+PREDICT_POOL_SEASONS = int(os.environ.get("BETODDS_PREDICT_POOL_SEASONS", "4"))
+
+# Mac detayindaki "Benzer oranli maclar" panelinin VARSAYILAN sapma payi.
+# PREDICT_GAP'ten (0.50) ayri tutuluyor: o, harmanlanmis tahminin 'similar'
+# bileseninin penceresi ve tum listelerde kullaniliyor; burasi ise tek bir
+# maca bakarken "gercekten ayni fiyat" demek istedigimiz yer.
+#
+# Olcum (son 4 sezon havuzu, taraf korunmus eslesme ile):
+#   ±0.50 -> ort. 45 (3x3) / 34 (5x5) ornek
+#   ±0.05 -> ort.  7 (3x3) /  4 (5x5) ornek  <- dar ama "ayni oran" demek bu
+# Kullanici paneldeki kutudan bu degeri her an genisletebiliyor.
+SIMILAR_GAP = float(os.environ.get("BETODDS_SIMILAR_GAP", "0.05"))
+
+# Mac detayindaki "Ornekteki maclar" listesinde en fazla kac mac. Liste oran
+# uzakligina gore sirali oldugu icin kesilen kisim EN UZAK ornekler olur.
+SIMILAR_SAMPLE_LIMIT = int(os.environ.get("BETODDS_SIMILAR_SAMPLE_LIMIT", "50"))
 PREDICT_CURRENT_WEIGHT = float(os.environ.get("BETODDS_PREDICT_CUR_W", "0.20"))
 
 # 'form' bileseni buzusme sabiti: w = n/(n+k). Tarama: k=1 -> 1.774,
@@ -124,7 +205,7 @@ DEFAULT_LEAGUES = [
     League(champ_id=2986291, name="FC 26. 5x5 Rush. Süper Lig",
            slug="fc26-5x5-rush-superleague", virtual=True,
            extra={"tourney_id": 149, "match_minutes": 11.0,
-                  "short_name": "5x5 Rush"}),
+                  "short_name": "FC 5x5 Superlig"}),
     League(champ_id=2860561, name="FC 25. 3x3. Konferans Ligi",
            slug="fc25-3x3-conference-league", virtual=True,
            extra={"tourney_id": 129, "match_minutes": 10.0,

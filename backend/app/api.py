@@ -1,6 +1,9 @@
 """HTTP API katmani."""
 import asyncio
+import datetime
 import json
+import math
+import os
 import time
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,11 +13,19 @@ from . import db
 from .collector import broadcaster, collector
 from .config import (LIVE_MATCH_MINUTES, League, POLL_SECONDS,
                      PREDICT_CURRENT_WEIGHT, PREDICT_FORM_K, PREDICT_GAP,
-                     PREDICT_SEASONS, PREDICT_WEIGHTS, load_leagues, save_leagues)
-from .markets import (LOST, MAIN_TYPES, OU_GROUP, OU_OVER, OU_UNDER, WON,
-                      goal_expectation, group_label, outcome_label, settle)
+                     PREDICT_POOL_SEASONS, PREDICT_SEASONS,
+                     SIMILAR_GAP, SIMILAR_SAMPLE_LIMIT,
+                     PREDICT_WEIGHTS, SAME_ODDS_GAP,
+                     SAME_ODDS_MIN_LEGS,
+                     SAME_ODDS_LIMIT, H2H_SEASONS,
+                     ODDS_GOAL_GAP, ODDS_GOAL_LIMIT, ODDS_GOAL_SAMPLES,
+                     RECENT_FINISHED_LIMIT,
+                     load_leagues, save_leagues)
+from .markets import (HIDDEN_GROUPS, LOST, MAIN_TYPES, OU_GROUP, OU_OVER,
+                      OU_UNDER, WON, calibrate_total, goal_expectation,
+                      group_label, outcome_label, settle)
 from .predict import Predictor, backtest, goal_prediction
-from .stats import StatsUnavailable, season_table
+from .stats import StatsUnavailable, season_page
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +41,24 @@ def _row(sql: str, args: tuple = ()) -> dict | None:
 
 
 # ------------------------------------------------------------------ durum
+def _build_id() -> str | None:
+    """Servis edilen arayuz paketinin adi, or. 'index-Ct07VQxx.js'.
+
+    Hangi surumun calistigini disaridan gorebilmek icin: eski bir imaj ya da
+    eski bir dist klasoru calisiyorsa bu deger de eski kalir. (Windows'ta
+    ikinci kurulumdan sonra eski imajin ayakta kalmasi tam olarak bu yuzden
+    fark edilmemisti.)
+    """
+    import re
+    from .main import STATIC_DIR
+    try:
+        with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
+            m = re.search(r'assets/(index-[^"\']+\.js)', f.read())
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
 @router.get("/health")
 def health():
     stats = _row("""SELECT
@@ -40,6 +69,7 @@ def health():
         (SELECT COUNT(*) FROM season_tables)                       AS season_rows""") or {}
     return {
         "ok": True,
+        "build": _build_id(),
         "collector": {
             "running": collector.running,
             "poll_seconds": POLL_SECONDS,
@@ -197,51 +227,157 @@ def _hit_lines(lines: dict[float, dict], total: int) -> dict:
 
     Alt {p} toplam < p ise, Ust {p} toplam > p ise kazanir (esitlik iade, ama
     cizgiler .5 oldugu icin pratikte olmuyor).
+    Dort ucun da hesaplanmasinin sebebi: hangi ikisinin gosterilecegi ekrana
+    gore degisiyor. Arsiv tablosu 'ilk tutan alt' + 'en ust tutan'i, mac
+    kartinin yanindaki gecmis kutusu 'ilk tutan alt' + 'ilk tutan ust'u
+    gosteriyor.
+
       ilk tutan alt  = tutan alt cizgilerin EN DUSUGU (toplama en yakin ust sinir)
+      son tutan alt  = tutan alt cizgilerin EN YUKSEGI (kitabin tavani)
+      ilk tutan ust  = tutan ust cizgilerin EN DUSUGU (kitabin actigi en dusuk
+                       ust - neredeyse her mac tutar, oran tabanini gosterir)
       en ust tutan   = tutan ust cizgilerin EN YUKSEGI (toplamin altindaki en buyuk)
     """
     unders = sorted(p for p, o in lines.items() if "under" in o and total < p)
-    overs = sorted((p for p, o in lines.items() if "over" in o and total > p),
-                   reverse=True)
-    res = {"under_first": None, "under_first_odd": None,
-           "over_top": None, "over_top_odd": None}
+    overs = sorted(p for p, o in lines.items() if "over" in o and total > p)
+    res = dict(_EMPTY_HIT)
     if unders:
         res["under_first"] = unders[0]
         res["under_first_odd"] = lines[unders[0]].get("under")
+        res["under_last"] = unders[-1]
+        res["under_last_odd"] = lines[unders[-1]].get("under")
     if overs:
-        res["over_top"] = overs[0]
-        res["over_top_odd"] = lines[overs[0]].get("over")
+        res["over_first"] = overs[0]
+        res["over_first_odd"] = lines[overs[0]].get("over")
+        res["over_top"] = overs[-1]
+        res["over_top_odd"] = lines[overs[-1]].get("over")
+    return res
+
+
+_EMPTY_HIT = {"under_first": None, "under_first_odd": None,
+              "under_last": None, "under_last_odd": None,
+              "over_first": None, "over_first_odd": None,
+              "over_top": None, "over_top_odd": None}
+
+_EMPTY_BOOK = {"book_over_last": None, "book_over_last_odd": None,
+               "book_over_first": None, "book_over_first_odd": None,
+               "book_under_first": None, "book_under_first_odd": None}
+
+
+def _book_lines(lines: dict[float, dict]) -> dict:
+    """Kitabin ACTIGI merdivenin iki ucu - skordan BAGIMSIZ.
+
+    _hit_lines'tan farki: orada uclar skora gore (hangi cizgi tuttu)
+    belirleniyor, burada kitabin teklif ettigi araligin ta kendisi:
+
+      son ust  = en YUKSEK cizginin Ust bacagi  (merdivenin tavani,
+                 en uzun oran - "toplam bu kadari da gecer mi")
+      ilk ust  = en DUSUK cizginin Ust bacagi   (merdivenin tabani,
+                 en kisa oran - "toplam bu esigi gecer mi"; neredeyse her
+                 mac tutar, tabloda oran TABANINI gosterir)
+      ilk alt  = en DUSUK cizginin Alt bacagi   (merdivenin tabani,
+                 en uzun oran - "toplam bu kadarin altinda kalir mi")
+
+    Skora ihtiyac duymadigi icin mac baslamadan da hesaplanabilir; su an
+    yalnizca biten maclarin gectigi yollarda (_enrich_finished, /matches,
+    /coverage) doluyor - /live bu hesabi hic yapmiyor.
+    Askiya alinmis (blocked) bacaklar _totals_by_event'te zaten eleniyor,
+    yani uclar GERCEKTEN oynanabilir olan cizgiler.
+    """
+    res = dict(_EMPTY_BOOK)
+    overs = sorted(p for p, o in lines.items() if o.get("over") is not None)
+    unders = sorted(p for p, o in lines.items() if o.get("under") is not None)
+    if overs:
+        res["book_over_last"] = overs[-1]
+        res["book_over_last_odd"] = lines[overs[-1]]["over"]
+        res["book_over_first"] = overs[0]
+        res["book_over_first_odd"] = lines[overs[0]]["over"]
+    if unders:
+        res["book_under_first"] = unders[0]
+        res["book_under_first_odd"] = lines[unders[0]]["under"]
     return res
 
 
 def _attach_totals(rows: list[dict]) -> None:
-    """Listedeki her maca tutan alt/ust cizgilerini ekler (skor + arsiv varsa)."""
-    scored = [r for r in rows
-              if r.get("score_home") is not None and r.get("score_away") is not None]
-    totals = _totals_by_event([r["event_id"] for r in scored])
+    """Her maca alt/ust cizgilerini ekler.
+
+    Iki grup: kitabin uclari (arsiv varsa yeter) ve tutan uclar (skor da
+    gerekir). Sorgu artik SKORSUZ maclari da kapsiyor: kitabin uclari mac
+    baslamadan da anlamli, cagiran uc skorsuz satir verirse onlar da dolar.
+    """
+    totals = _totals_by_event([r["event_id"] for r in rows])
     for r in rows:
         lines = totals.get(r["event_id"])
-        if lines and r.get("score_home") is not None:
+        r.update(_book_lines(lines) if lines else _EMPTY_BOOK)
+        if lines and r.get("score_home") is not None \
+                 and r.get("score_away") is not None:
             r.update(_hit_lines(lines, r["score_home"] + r["score_away"]))
         else:
-            r.update({"under_first": None, "under_first_odd": None,
-                      "over_top": None, "over_top_odd": None})
+            r.update(_EMPTY_HIT)
 
 
-def _match_filter(champ_id, status, team, o1, ox, o2, gap):
-    """/matches ve /matches/stats icin ortak WHERE kurulumu.
+def _team_clause(team, side, opp):
+    """Takim aramasinin WHERE parcasi - ev sahibi/deplasman ayrimiyla.
+
+    side: 'home' -> takim yalnizca EVINDE, 'away' -> yalnizca DEPLASMANDA,
+    bos -> iki taraf da. opp verilirse RAKIP de suzulur; taraf secilmemisse
+    eslesme iki yonlu olur (A evinde B'ye karsi VEYA B evinde A'ya karsi) -
+    aksi halde "A ile B'nin maclari" sorusu yarim cevaplanirdi.
+    """
+    # Yalniz rakip girilmisse onu takim gibi ele al: aramanin tarafi ters doner.
+    if not team and opp:
+        team, opp = opp, None
+        side = {"home": "away", "away": "home"}.get(side, side)
+    if not team:
+        return None, []
+    t, o = f"%{team}%", f"%{opp}%" if opp else None
+    if side == "home":
+        return ("m.home LIKE ? AND m.away LIKE ?", [t, o]) if o else ("m.home LIKE ?", [t])
+    if side == "away":
+        return ("m.away LIKE ? AND m.home LIKE ?", [t, o]) if o else ("m.away LIKE ?", [t])
+    if o:
+        return ("((m.home LIKE ? AND m.away LIKE ?) OR (m.away LIKE ? AND m.home LIKE ?))",
+                [t, o, t, o])
+    return "(m.home LIKE ? OR m.away LIKE ?)", [t, t]
+
+
+def _day_start(day: str) -> int:
+    """'YYYY-MM-DD' -> o gunun YEREL saatle basladigi an (unix saniye).
+
+    start_ts yerel saate gore yorumlaniyor: kullanici takvimden 5 Eylul
+    secince 5 Eylul 00:00'dan 6 Eylul 00:00'a kadar oynanan maclari bekler,
+    UTC'ye kayan bir aralik degil.
+    """
+    try:
+        d = datetime.date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(422, f"tarih 'YYYY-AA-GG' olmali: {day}")
+    return int(datetime.datetime.combine(d, datetime.time.min).timestamp())
+
+
+def _match_filter(champ_id, status, team, o1, ox, o2, gap, side=None, opp=None,
+                  date_from=None, date_to=None):
+    """/matches, /matches/stats ve /results icin ortak WHERE kurulumu.
 
     Oran filtresi mac ONCESI 1X2 (p.p1/px/p2) uzerinden calisir; girilmeyen
     taraf serbest kalir. `dist` girilen oranlara toplam mutlak uzakliktir.
+
+    date_from/date_to gun bazinda ve IKI UCU DA DAHIL: date_to verilen gunun
+    sonuna kadar (ertesi gunun basi haric) sayilir, yoksa "9 Eylul"u secen
+    kullanici o gunku hicbir maci goremezdi.
     """
     where, args = ["1=1"], []
+    if date_from:
+        where.append("m.start_ts >= ?"); args.append(_day_start(date_from))
+    if date_to:
+        where.append("m.start_ts < ?"); args.append(_day_start(date_to) + 86400)
     if champ_id is not None:
         where.append("m.champ_id = ?"); args.append(champ_id)
     if status:
         where.append("m.status = ?"); args.append(status)
-    if team:
-        where.append("(m.home LIKE ? OR m.away LIKE ?)")
-        args += [f"%{team}%", f"%{team}%"]
+    clause, cargs = _team_clause(team, side, opp)
+    if clause:
+        where.append(clause); args += cargs
 
     wanted = [(c, v) for c, v in (("p.p1", o1), ("p.px", ox), ("p.p2", o2))
               if v is not None]
@@ -428,12 +564,22 @@ def match_detail(event_id: int):
 
 
 @router.get("/matches/{event_id}/similar")
-def match_similar(event_id: int, gap: float = Query(PREDICT_GAP, gt=0, le=5)):
+def match_similar(event_id: int, gap: float = Query(SIMILAR_GAP, gt=0, le=5)):
     """Baslangic oranlari bu maca yakin olan BITEN maclar + gol tahmini.
 
-    Pencere `gap` ile daraltilip genisletilebilir; varsayilan PREDICT_GAP.
+    Ornek kumesi iki kez daraltilir:
+      1) TARAF KORUNARAK takim eslesmesi: bu macin ev sahibi o macta da EVDE
+         olmali ya da deplasman takimi orada da DEPLASMANDA. Ev sahipligi gol
+         uretimini degistirdigi icin takimi ters tarafta gormek "ayni durum"
+         sayilmiyor,
+      2) oran uzakligina gore en yakin SIMILAR_SAMPLE_LIMIT tanesi.
+
+    Pencere `gap` ile daraltilip genisletilebilir; varsayilan SIMILAR_GAP.
     Mac kendisi ornekten cikarilir (bitmis bir maci kendi tahmininde saymak
     isabeti yapay olarak yukseltirdi).
+
+    Isabet olcumu (`accuracy`) TUM havuz uzerinden kalir: o, yontemin
+    arsivdeki genel isabetini anlatiyor, bu iki takimin maclarini degil.
     """
     m = _row(f"""SELECT m.event_id, m.champ_id, m.home, m.away, m.status, m.start_ts,
                         m.score_home, m.score_away, p.p1, p.px, p.p2
@@ -448,9 +594,18 @@ def match_similar(event_id: int, gap: float = Query(PREDICT_GAP, gt=0, le=5)):
     # Benzerlik yalnizca AYNI lig icinde anlamli: format degisince ayni oran
     # apayri bir gol beklentisine karsilik geliyor.
     pool = _prediction_pool(m["champ_id"])
-    pred = goal_prediction(m["p1"], m["p2"], pool, gap, exclude=event_id, detail=True)
+    # Taraf korunur: ev sahibimiz evde YA DA deplasmanimiz deplasmanda.
+    kendi = [r for r in pool
+             if r["home"] == m["home"] or r["away"] == m["away"]]
+    pred = goal_prediction(m["p1"], m["p2"], kendi, gap, exclude=event_id,
+                           detail=True, limit=SIMILAR_SAMPLE_LIMIT)
     pred["accuracy"] = backtest(pool, gap)
-    pred["pool"] = len(pool)
+    pred["pool"] = len(kendi)
+    pred["pool_all"] = len(pool)
+    # Hangi sezonlarin sayildigi ekranda yaziyor: ornek kumesi daraldiginda
+    # sebebi gorunur olmali.
+    pred["seasons"] = sorted({r["iteration"] for r in pool
+                              if r.get("iteration") is not None}, reverse=True)
     return {"event_id": event_id, "home": m["home"], "away": m["away"],
             "p1": m["p1"], "px": m["px"], "p2": m["p2"], "predict": pred}
 
@@ -485,8 +640,11 @@ def match_odds(event_id: int, phase: str = "auto"):
     sh, sa = match.get("score_home"), match.get("score_away")
     settled = match.get("status") == "finished" and sh is not None
 
-    vals = _rows("SELECT g, gs, t, p, coef, blocked FROM odds_values "
-                 "WHERE snapshot_id=? ORDER BY g, t, p", (snap["id"],))
+    # HIDDEN_GROUPS burada eleniyor - sonuclandirma sayaci (tally) da bu
+    # pazarlari saymasin diye sorgunun hemen ardindan, tek yerde.
+    vals = [v for v in _rows("SELECT g, gs, t, p, coef, blocked FROM odds_values "
+                             "WHERE snapshot_id=? ORDER BY g, t, p", (snap["id"],))
+            if v["g"] not in HIDDEN_GROUPS]
     tally = {"won": 0, "lost": 0, "void": 0, "unknown": 0}
     groups: dict[int, dict] = {}
     for v in vals:
@@ -584,18 +742,24 @@ async def sync_seasons(tourney_id: int, start: int, end: int,
     """eventsstat'tan sezon tablolarini ceker (var olanlari atlar)."""
     if end < start or end - start > 200:
         raise HTTPException(400, "gecersiz aralik (en fazla 200 sezon)")
-    added, skipped, failed = 0, 0, []
+    added, skipped, failed, games = 0, 0, [], 0
     for it in range(start, end + 1):
+        # Hem puan durumu HEM maclari varsa atla. Sezon maclari sonradan
+        # eklendigi icin, yalnizca tablosu olan sezonlar yeniden cekilmeli.
         exists = _row("SELECT 1 FROM season_tables WHERE tourney_id=? AND iteration=? "
+                      "AND EXISTS(SELECT 1 FROM season_matches sm "
+                      "           WHERE sm.tourney_id=season_tables.tourney_id "
+                      "             AND sm.iteration=season_tables.iteration) "
                       "LIMIT 1", (tourney_id, it))
         if exists:
             skipped += 1
             continue
         try:
-            table = await season_table(tourney_id, it)
+            page = await season_page(tourney_id, it)
         except (StatsUnavailable, Exception) as ex:    # noqa: BLE001
             failed.append({"iteration": it, "error": str(ex)[:120]})
             continue
+        table = page["table"]
         if not table:
             failed.append({"iteration": it, "error": "bos tablo"})
             continue
@@ -608,10 +772,17 @@ async def sync_seasons(tourney_id: int, start: int, end: int,
                 [(champ_id, tourney_id, it, r["team"], r["pos"], r["played"],
                   r["wins"], r["draws"], r["losses"], r["gf"], r["ga"],
                   r["points"], now) for r in table])
+            # Ayni sayfadan cikan capraz sonuc tablosu: sezonun tekil maclari.
+            con.executemany("""INSERT OR REPLACE INTO season_matches
+                (tourney_id, iteration, home, away, score_home, score_away, fetched_at)
+                VALUES (?,?,?,?,?,?,?)""",
+                [(tourney_id, it, m["home"], m["away"], m["score_home"],
+                  m["score_away"], now) for m in page["matches"]])
+            games += len(page["matches"])
         added += 1
         await asyncio.sleep(0.4)          # kaynagi yormayalim
-    return {"added": added, "skipped": skipped, "failed": failed[:20],
-            "failed_count": len(failed)}
+    return {"added": added, "skipped": skipped, "matches": games,
+            "failed": failed[:20], "failed_count": len(failed)}
 
 
 
@@ -706,6 +877,183 @@ def coverage(champ_id: int | None = None, limit: int = Query(100, le=500)):
 # ------------------------------------------------------------------ pano
 
 
+# {where} _match_filter'dan gelir (lig, takim/taraf, oran araligi); skor
+# sarti burada duruyor cunku "biten mac" sayilmanin kosulu, filtre degil.
+FINISHED_SELECT = """
+        SELECT m.*, p.p1, p.px, p.p2
+        FROM matches m LEFT JOIN ({odds}) p ON p.event_id = m.event_id
+        WHERE {where} AND m.score_home IS NOT NULL
+        ORDER BY m.start_ts DESC
+"""
+
+
+def _finished_rows(champ_id, team=None, side=None, opp=None,
+                   o1=None, ox=None, o2=None, gap=0.25, limit=None,
+                   date_from=None, date_to=None):
+    """Biten maclari filtreleyip sonuc tablosunun alanlariyla tamamlar."""
+    where, _sa, args, _d, _w = _match_filter(
+        champ_id, "finished", team, o1, ox, o2, gap, side, opp,
+        date_from, date_to)
+    sql = FINISHED_SELECT.format(odds=PREMATCH_ODDS, where=where)
+    if limit is not None:
+        sql += " LIMIT ?"
+        args = args + [limit]
+    rows = _rows(sql, tuple(args))
+    _enrich_finished(rows)
+    return rows
+
+
+def _enrich_finished(rows: list[dict]) -> None:
+    """Biten mac satirlarini sonuc tablosunun gosterdigi alanlarla tamamlar.
+
+    Hem panonun tepesindeki ozet hem Sonuclar sayfasi ayni sutunlari
+    gosteriyor; hesap tek yerde.
+    """
+    if not rows:
+        return
+    _attach_totals(rows)             # kitabin uclari + tutan cizgiler
+    _attach_expectations(rows)       # mac oncesi gol beklentisi
+    _attach_odds_goals(rows)         # ayni oranli son maclardan "oran golu"
+    for row in rows:
+        row["total"] = row["score_home"] + row["score_away"]
+        e = row.get("expect") or {}
+        # "Beklenen gol tuttu" olcutu: gercek toplam beklentinin USTUNDE.
+        # Yani beklenti bir tahmin degil, ALT SINIR gibi okunuyor - "en az bu
+        # kadar gol" bekleniyordu, oldu mu?
+        row["expect_hit"] = (e.get("total") is not None
+                             and row["total"] > e["total"])
+
+
+def _recent_finished(champ_id: int | None,
+                     limit: int = RECENT_FINISHED_LIMIT) -> list[dict]:
+    """Son biten maclar - panonun tepesindeki ozet.
+
+    Siralama macin OYNANDIGI ana (start_ts) gore, kapandigi ana gore degil.
+    finished_at iki nedenle bozuk bir siralama uretiyordu: feed'den dusen mac
+    saatler sonra kapaniyor (49 kayitta 1 saatten fazla fark var) ve disaridan
+    ice aktarilan kayitlarda alan hic yok. Ikisi karisinca listede tarihler
+    ileri geri zipliyordu.
+    """
+    return _finished_rows(champ_id, limit=limit)
+
+
+def _rate(hits: int, n: int) -> dict:
+    """Tutma orani + PAYDA. Yuzde tek basina yaniltici: 3 macta 2 tutmus
+    bir kural %66 gorunur, o yuzden n her zaman yaninda gider."""
+    return {"hit": hits, "n": n, "pct": round(100 * hits / n, 1) if n else None}
+
+
+def _hit_rates(scored: list[dict], counts: dict) -> dict:
+    """Sonuclar sayfasindaki tutma oranlari.
+
+    Kume 'hit' filtresinden ONCEKI satirlardir - counts ile ayni. Aksi
+    halde "Tuttu"ya basinca oran %100 cikardi.
+
+    Paydalar farkli: beklenti yalnizca mac oncesi arsivi olan maclarda,
+    kitap uclari yalnizca o ucu acilmis maclarda olculebilir.
+
+    Iki ust cizgisi de olculuyor: SON ust merdivenin tavani (nadiren tutar,
+    uzun oran), ILK ust tabani (cogu mac tutar, oranin tabani). Ikisi birlikte
+    kitabin actigi araligin ne kadarinin gerceklestigini anlatiyor.
+    """
+    last_n = last_hit = first_n = first_hit = 0
+    for r in scored:
+        tot = r.get("total")
+        if tot is None:
+            continue
+        if r.get("book_over_last") is not None:
+            last_n += 1
+            last_hit += tot > r["book_over_last"]
+        if r.get("book_over_first") is not None:
+            first_n += 1
+            first_hit += tot > r["book_over_first"]
+    return {
+        "expect": _rate(counts["hit"], counts["hit"] + counts["miss"]),
+        "over_last": _rate(last_hit, last_n),
+        "over_first": _rate(first_hit, first_n),
+    }
+
+
+def _finished_span(champ_id: int | None) -> dict:
+    """Arsivde biten maclarin ilk/son gunu - tarih kutularinin sinirlari.
+
+    Tarih suzgecinden ETKILENMEZ: secim daraldikca takvimin sinirlari da
+    daralsaydi kullanici bir kez sectigi araligin disina cikamazdi.
+    """
+    row = _row("""SELECT MIN(start_ts) AS lo, MAX(start_ts) AS hi FROM matches m
+                   WHERE m.status = 'finished' AND m.score_home IS NOT NULL
+                     AND (? IS NULL OR m.champ_id = ?)""",
+               (champ_id, champ_id))
+    day = lambda ts: datetime.date.fromtimestamp(ts).isoformat()  # noqa: E731
+    return {"first": day(row["lo"]), "last": day(row["hi"])} if row and row["lo"] \
+        else {"first": None, "last": None}
+
+
+@router.get("/results")
+def results(champ_id: int | None = None, hit: str | None = None,
+            team: str | None = None, side: str | None = None,
+            opp: str | None = None,
+            date_from: str | None = None, date_to: str | None = None,
+            o1: float | None = None, ox: float | None = None,
+            o2: float | None = None, gap: float = Query(0.25, gt=0),
+            limit: int = Query(50, ge=1, le=200), offset: int = 0):
+    """Sonuclar sayfasi: biten maclar, panodaki ozetle ayni bicimde.
+
+    Filtreler:
+      team + side  takim adi; side 'home'/'away' ile yalnizca evinde ya da
+                   deplasmanda oynadigi maclar, bos birakilirsa iki taraf da
+      opp          rakip (taraf secilmemisse eslesme iki yonlu)
+      date_from/   maçin oynandigi gun araligi (YYYY-AA-GG), iki ucu da dahil
+      date_to
+      o1/ox/o2     mac oncesi 1X2 orani, her biri icin +/- gap
+      hit          'yes' -> toplam gol beklentiyi asanlar
+                   'no'  -> beklentisi OLAN ama asmayanlar
+                   yok   -> hepsi
+
+    Beklentisi olmayan maclar (mac oncesi arsivi yakalanmamis) hit
+    filtrelerinin ikisine de girmez - "tuttu mu" sorusu onlar icin
+    cevaplanamiyor. `counts` ve `avg_goals` ise hit DISINDAKI filtrelerin
+    tamami uzerinden hesaplanir: secim daraldikca ozet de daralir.
+
+    team/opp/oran suzmesi SQL'de, hit suzmesi Python'da: expect_hit mac
+    oncesi snapshot'tan hesaplanan bir deger, SQL'de yok. Bu yuzden once
+    SQL daraltir, sonra kalan satirlar zenginlestirilir - filtre girildikce
+    istek HIZLANIR.
+    """
+    rows = _finished_rows(champ_id, team, side, opp, o1, ox, o2, gap,
+                          date_from=date_from, date_to=date_to)
+
+    scored = [r for r in rows if (r.get("expect") or {}).get("total") is not None]
+    counts = {
+        "all": len(rows),
+        "hit": sum(1 for r in scored if r["expect_hit"]),
+        "miss": sum(1 for r in scored if not r["expect_hit"]),
+        "no_expect": len(rows) - len(scored),
+    }
+    if hit == "yes":
+        rows = [r for r in scored if r["expect_hit"]]
+    elif hit == "no":
+        rows = [r for r in scored if not r["expect_hit"]]
+
+    total = len(rows)
+    goals = sum(r["total"] for r in rows)
+    page = rows[offset:offset + limit]
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "hit": hit,
+        "counts": counts,
+        "rates": _hit_rates(scored, counts),
+        "filters": {"team": team or "", "side": side or "", "opp": opp or "",
+                    "date_from": date_from or "", "date_to": date_to or "",
+                    "o1": o1, "ox": ox, "o2": o2, "gap": gap},
+        "date_range": _finished_span(champ_id),
+        "avg_goals": round(goals / total, 2) if total else None,
+        "matches": page,
+    }
+
+
 @router.get("/dashboard")
 def dashboard(champ_id: int | None = None):
     """Ana sayfadaki panonun tum verisini tek istekte dondurur.
@@ -769,6 +1117,9 @@ def dashboard(champ_id: int | None = None):
         ORDER BY m.start_ts ASC""", ca)
     _attach_expectations(live)
     _attach_predictions(live)
+    _attach_h2h(live)
+    _attach_positions(live)
+    _attach_match_minutes(live)
 
     return {
         "counts": counts,
@@ -776,13 +1127,394 @@ def dashboard(champ_id: int | None = None):
         "avg_goals": avg_goals,
         "avg_goals_sample": g.get("n") or 0,
         "by_league": by_league,
+        "recent_finished": _recent_finished(champ_id),
         "live": live,
-        "goal_distribution": _goal_distribution(live),
         "season_trends": _season_trends(champ_id),
     }
 
 
-def _prediction_pool(champ_id: int | None = None) -> list[dict]:
+# --------------------------------------------------- lig sirasi / mac suresi
+def _attach_positions(rows: list[dict]) -> None:
+    """Her maca iki takimin lig sirasini ekler (home_pos / away_pos).
+
+    Sira macin OYNANDIGI sezondan okunur; o sezonun tablosu henuz cekilmemisse
+    (surmekte olan sezon icin normal) en son bilinen sezona duseriz ve
+    pos_current=True ile isaretleriz - arayuz bunu "guncel tablodan" diye
+    gosterebilsin, sira uydurulmus gibi durmasin.
+    """
+    cache: dict[int, tuple[dict, int | None]] = {}
+    for r in rows:
+        tid = r.get("tourney_id")
+        if tid is None:
+            r["home_pos"] = r["away_pos"] = None
+            r["pos_iteration"], r["pos_current"] = None, False
+            continue
+        if tid not in cache:
+            cache[tid] = _season_positions(tid)
+        by_iter, latest = cache[tid]
+        it = r.get("iteration")
+        use = it if it in by_iter else latest
+        table = by_iter.get(use, {})
+        r["home_pos"] = table.get(r.get("home"))
+        r["away_pos"] = table.get(r.get("away"))
+        r["pos_iteration"] = use
+        r["pos_current"] = use is not None and use != it
+
+
+def _attach_match_minutes(rows: list[dict]) -> None:
+    """Sanal macin gercek zamanli suresi (dakika) - ligden lige degisir.
+
+    Arayuz "kac dakika kaldi" hesabini bununla yapiyor; leagues.json
+    disinda baska kaynagi yok, o yuzden mac satirina yaziyoruz.
+    """
+    mins = _league_match_minutes()
+    for r in rows:
+        r["match_minutes"] = mins.get(r.get("champ_id"), LIVE_MATCH_MINUTES)
+
+
+# --------------------------------------------------- karsilasma gecmisi (h2h)
+def _season_positions(tourney_id: int | None) -> tuple[dict, int | None]:
+    """(iterasyon -> {takim: sira}, en son iterasyon)
+
+    Sira, macin OYNANDIGI sezondan okunur. matches.iteration ancak
+    GetGameZip'ten geri yazildigi maclarda dolu (bkz. collector._save_meta);
+    eski kayitlarda bos oldugu icin en son sezona duseriz - bu durum
+    'pos_current' bayragiyla isaretlenir, sira uydurulmus gibi gorunmesin.
+    """
+    if tourney_id is None:
+        return {}, None
+    by_iter: dict[int, dict[str, int]] = {}
+    for r in _rows("SELECT iteration, team, pos FROM season_tables "
+                   "WHERE tourney_id = ?", (tourney_id,)):
+        by_iter.setdefault(r["iteration"], {})[r["team"]] = r["pos"]
+    return by_iter, (max(by_iter) if by_iter else None)
+
+
+H2H_LIMIT = 8
+
+
+
+def _decorate(rows: list[dict], home: str, by_iter: dict,
+              latest: int | None) -> None:
+    """Gecmis mac satirlarini ekranda gerekli alanlarla tamamlar.
+
+    Hem karsilasma gecmisi hem ayni oranli maclar ayni sutunlari gosteriyor;
+    tutan cizgiler ve lig sirasi tek yerden ekleniyor.
+    """
+    totals = _totals_by_event([r["event_id"] for r in rows])
+    for r in rows:
+        r["total"] = r["score_home"] + r["score_away"]
+        r.update(_hit_lines(totals.get(r["event_id"]) or {}, r["total"]))
+        it = r["iteration"] if r["iteration"] in by_iter else latest
+        table = by_iter.get(it) or {}
+        r["home_pos"] = table.get(r["home"])
+        r["away_pos"] = table.get(r["away"])
+        # Sira macin kendi sezonundan mi geldi, yoksa en son tablodan mi?
+        r["pos_current"] = bool(table) and r["iteration"] not in by_iter
+        # Onceki maclar iki dizilistede olabilir; ekranda su anki ev sahibinin
+        # attigi gol hep ayni sutunda dursun.
+        swapped = r["home"] != home
+        r["for_home"] = r["score_away"] if swapped else r["score_home"]
+        r["for_away"] = r["score_home"] if swapped else r["score_away"]
+
+
+def _summary(rows: list[dict], split: bool = True) -> dict:
+    """split=False: ev/deplasman kirilimi verilmez.
+
+    'Ayni oranli maclar' listesinde gecmis macin taraflari bizim maci degil,
+    baska bir eslesmeyi tarif ediyor - o satirlarda ev/deplasman ortalamasi
+    yaniltici olurdu.
+    """
+    n = len(rows)
+    if not n:
+        return {"n": 0, "matches": []}
+    out = {"n": n,
+           "avg_total": round(sum(r["total"] for r in rows) / n, 2),
+           "matches": rows}
+    if split:
+        out["avg_home"] = round(sum(r["for_home"] for r in rows) / n, 2)
+        out["avg_away"] = round(sum(r["for_away"] for r in rows) / n, 2)
+    return out
+
+
+PAST_SELECT = """
+        SELECT m.event_id, m.start_ts, m.home, m.away, m.iteration,
+               m.score_home, m.score_away, p.p1, p.px, p.p2
+        FROM matches m LEFT JOIN ({odds}) p ON p.event_id = m.event_id
+        WHERE m.champ_id = ? AND m.status = 'finished'
+              AND m.score_home IS NOT NULL AND m.score_away IS NOT NULL
+              AND m.event_id != ?
+"""
+
+
+def _same_odds(match: dict, exclude: set[int], by_iter: dict,
+               latest: int | None, gap: float = SAME_ODDS_GAP) -> dict:
+    """Bu macin takimlarindan YALNIZCA BIRININ oynadigi ve o takimin ayni
+    oranla fiyatlandigi BITEN maclar.
+
+    Olcut takim bazli, ayak bazli degil:
+      * gecmis macta bizim iki takimimizdan TAM OLARAK biri olacak
+        (ikisi de varsa o zaten karsilasma gecmisi, ustteki tabloda),
+      * o takimin O MACTAKI orani, BU MACTAKI oranina +/-gap yakin olacak.
+
+    Takim evde de deplasmanda da olabilir; oran her iki tarafta da takimin
+    kendi ayagindan okunur (evdeyse 1, deplasmandaysa 2). Boylece "bu takim
+    daha once de bu fiyata oynadi, ne oldu" sorusu cevaplanir.
+
+    Takimin kendi ayagi TEK BASINA yetmiyor: 1/X/2 ucundan en az
+    SAME_ODDS_MIN_LEGS tanesi tutmali. Tek ayak esitlendiginde kalan iki ayak
+    cok farkli olabiliyordu - "ayni oranli" denen mac aslinda bambaska
+    fiyatlanmis bir mac cikiyordu.
+
+    Ayaklar TAKIMIN BAKIS ACISINDAN hizalanir: (kendi orani, beraberlik,
+    rakip orani). Takim gecmis macta obur tarafta oynadiysa o macin 1 ve 2
+    ayaklari yer degistirir; ham sutunlari karsilastirmak takim deplasmandayken
+    yanlis ayaklari eslestirirdi.
+    """
+    home, away = match.get("home"), match.get("away")
+    p1, px, p2 = match.get("p1"), match.get("px"), match.get("p2")
+    if not home or not away or p1 is None or p2 is None:
+        return {"n": 0, "matches": [], "gap": gap}
+    ref = {home: p1, away: p2}
+    # Takimin bakis acisiyla (kendi, beraberlik, rakip)
+    ref_legs = {home: (p1, px, p2), away: (p2, px, p1)}
+
+    # Aday havuzu: iki takimdan en az biri gecen maclar, yeniden eskiye.
+    # "Tam olarak biri" ve oran yakinligi Python'da suzuluyor - takimin hangi
+    # tarafta oynadigina gore farkli sutuna bakmak gerekiyor, bunu SQL'de
+    # yazmak okunmaz bir CASE yiginina donusuyor.
+    rows = _rows(
+        PAST_SELECT.format(odds=PREMATCH_ODDS) +
+        """      AND p.p1 IS NOT NULL AND p.p2 IS NOT NULL
+              AND (m.home IN (?, ?) OR m.away IN (?, ?))
+        ORDER BY m.start_ts DESC
+        LIMIT 500""",
+        (match.get("champ_id"), match.get("event_id"),
+         home, away, home, away))
+
+    picked = []
+    for r in rows:
+        if r["event_id"] in exclude:
+            continue
+        ours = {r["home"], r["away"]} & {home, away}
+        if len(ours) != 1:
+            continue
+        team = ours.pop()
+        at_home = r["home"] == team
+        odd = r["p1"] if at_home else r["p2"]
+        if abs(odd - ref[team]) > gap:
+            continue
+        cand_legs = ((r["p1"], r["px"], r["p2"]) if at_home
+                     else (r["p2"], r["px"], r["p1"]))
+        hits = sum(1 for x, y in zip(ref_legs[team], cand_legs)
+                   if x is not None and y is not None and abs(x - y) <= gap)
+        if hits < SAME_ODDS_MIN_LEGS:
+            continue
+        r["leg_hits"] = hits
+        r["team"] = team
+        r["team_odd"] = odd
+        r["team_ref"] = ref[team]
+        r["team_side"] = "home" if at_home else "away"
+        r["hit_1"], r["hit_2"] = at_home, not at_home
+        picked.append(r)
+        if len(picked) >= SAME_ODDS_LIMIT:
+            break
+
+    _decorate(picked, home, by_iter, latest)
+    out = _summary(picked, split=False)
+    out["gap"] = gap
+    out["limit"] = SAME_ODDS_LIMIT
+    out["min_legs"] = SAME_ODDS_MIN_LEGS
+    out["ref"] = {"p1": p1, "px": px, "p2": p2}
+    return out
+
+
+def _season_h2h(tourney_id: int | None, home: str, away: str,
+                seasons: int = H2H_SEASONS) -> dict:
+    """Son N sezonda ayni iki takimin oynadigi maclar (eventsstat).
+
+    Bizim arsivimiz yalnizca birkac gunu kapsiyor, dolayisiyla gecmis
+    sezonlardaki eslesmeler icin tek kaynak sitenin sezon ozeti. Oran YOK -
+    o kayitlar sadece skor tasiyor.
+    """
+    if tourney_id is None or not home or not away:
+        return {"n": 0, "seasons": [], "matches": []}
+    its = [r["iteration"] for r in _rows(
+        "SELECT DISTINCT iteration FROM season_matches WHERE tourney_id = ? "
+        "ORDER BY iteration DESC LIMIT ?", (tourney_id, seasons))]
+    if not its:
+        return {"n": 0, "seasons": [], "matches": []}
+    marks = ",".join("?" * len(its))
+    rows = _rows(
+        f"""SELECT iteration, home, away, score_home, score_away
+            FROM season_matches
+            WHERE tourney_id = ? AND iteration IN ({marks})
+                  AND ((home = ? AND away = ?) OR (home = ? AND away = ?))
+            ORDER BY iteration DESC, home""",
+        (tourney_id, *its, home, away, away, home))
+    for r in rows:
+        r["total"] = r["score_home"] + r["score_away"]
+        # Ekranda su anki ev sahibinin golu hep ayni sutunda dursun.
+        swapped = r["home"] != home
+        r["for_home"] = r["score_away"] if swapped else r["score_home"]
+        r["for_away"] = r["score_home"] if swapped else r["score_away"]
+    out = {"n": len(rows), "seasons": its, "matches": rows}
+    if rows:
+        n = len(rows)
+        out["avg_total"] = round(sum(r["total"] for r in rows) / n, 2)
+        out["avg_home"] = round(sum(r["for_home"] for r in rows) / n, 2)
+        out["avg_away"] = round(sum(r["for_away"] for r in rows) / n, 2)
+    return out
+
+
+def _odds_goal(match: dict, pool: list[dict], gap: float = ODDS_GOAL_GAP,
+               limit: int = ODDS_GOAL_LIMIT,
+               samples: int = ODDS_GOAL_SAMPLES) -> dict:
+    """Ayni oranla oynanmis son maclardan beklenen gol - "oran golu".
+
+    Aday mac EV/DEPLASMAN KONUMLARI KORUNARAK eslesir: ev ayagi ev ayagiyla,
+    deplasman ayagi deplasman ayagiyla, ikisi de +/-gap icinde. Takim onemli
+    degil - soru "bu FIYATA oynanan maclarda kac gol oluyor".
+
+    Yalnizca macin KENDINDEN ONCEKI maclar sayilir. Sonradan oynanmis maclari
+    katmak, bitmis bir macin tahminine o macin gelecegini karistirmak olurdu;
+    "tuttu mu" sorusu da anlamsizlasirdi.
+
+    Beklenen gol, ortalamaya uygulamanin kendi kalibrasyonuyla bulunur
+    (bkz. markets.calibrate_total): ortalamadan 0.5 dusulup altindaki x.5'e
+    yuvarlanir, boylece dogrudan bir Alt/Ust cizgisiyle karsilastirilabilir.
+    """
+    p1, p2 = match.get("p1"), match.get("p2")
+    out = {"n": 0, "gap": gap, "limit": limit, "total": None, "avg_total": None,
+           "avg_home": None, "avg_away": None, "matches": []}
+    if p1 is None or p2 is None:
+        return out
+
+    ref_ts, ref_id = match.get("start_ts"), match.get("event_id")
+    picked = []
+    for r in pool:                       # havuz tarihe gore AZALAN
+        if r["event_id"] == ref_id:
+            continue
+        if ref_ts is not None and r["start_ts"] >= ref_ts:
+            continue
+        if r["p1"] is None or r["p2"] is None:
+            continue
+        if abs(r["p1"] - p1) > gap or abs(r["p2"] - p2) > gap:
+            continue
+        picked.append(r)
+        if len(picked) >= limit:
+            break
+    if not picked:
+        return out
+
+    home = [r["score_home"] for r in picked]
+    away = [r["score_away"] for r in picked]
+    avg = (sum(home) + sum(away)) / len(picked)
+    out.update({
+        "n": len(picked),
+        "avg_home": round(sum(home) / len(picked), 2),
+        "avg_away": round(sum(away) / len(picked), 2),
+        "avg_total": round(avg, 2),
+        "total": calibrate_total(avg),
+        "matches": [{"event_id": r["event_id"], "start_ts": r["start_ts"],
+                     "home": r["home"], "away": r["away"],
+                     "score_home": r["score_home"], "score_away": r["score_away"],
+                     "total": r["score_home"] + r["score_away"],
+                     "p1": r["p1"], "px": r["px"], "p2": r["p2"]}
+                    for r in picked[:samples]],
+    })
+    return out
+
+
+def _attach_odds_goals(rows: list[dict]) -> None:
+    """Her maca oran golunu ekler (tablo sutunu icin duz alanlar).
+
+    Havuz LIG BASINA bir kez okunur; her mac icin ayri sorgu atmak listeyi
+    mac sayisi kadar yavaslatirdi. Sezon siniri YOK - "son 20 mac" zaten
+    yakinligi tarihten aliyor.
+    """
+    pools: dict[int | None, list[dict]] = {}
+    for r in rows:
+        champ = r.get("champ_id")
+        if champ not in pools:
+            pools[champ] = _prediction_pool(champ, seasons=0)
+        og = _odds_goal(r, pools[champ])
+        r["odds_goal"] = og["total"]
+        r["odds_goal_n"] = og["n"]
+        total = r.get("total")
+        if total is None and r.get("score_home") is not None:
+            total = r["score_home"] + r["score_away"]
+        r["odds_goal_hit"] = (og["total"] is not None and total is not None
+                              and total > og["total"])
+
+
+def _h2h(match: dict, positions: tuple[dict, int | None] | None = None,
+         tourney: int | None = None,
+         pool: list[dict] | None = None) -> dict:
+    """Ayni iki takimin gecmiste oynadigi BITEN maclar.
+
+    Ev/deplasman ayrimi gozetilmez: iki dizilis de ayni eslesmedir, arsiv
+    zaten kucuk (bir ciftin en fazla 3 macini gorduk).
+    """
+    home, away = match.get("home"), match.get("away")
+    # matches.tourney_id cogu kayitta bos (liste feed'i gondermiyor); cagiran
+    # taraf ligin turnuvasini cozup geciriyor.
+    tourney = tourney or match.get("tourney_id")
+    by_iter, latest = positions if positions is not None else \
+        _season_positions(tourney)
+    rows = []
+    if home and away:
+        rows = _rows(
+            PAST_SELECT.format(odds=PREMATCH_ODDS) +
+            """      AND ((m.home = ? AND m.away = ?) OR (m.home = ? AND m.away = ?))
+        ORDER BY m.start_ts DESC LIMIT ?""",
+            (match.get("champ_id"), match.get("event_id"),
+             home, away, away, home, H2H_LIMIT))
+        _decorate(rows, home, by_iter, latest)
+    out = _summary(rows)
+    out["same_odds"] = _same_odds(match, {r["event_id"] for r in rows},
+                                  by_iter, latest)
+    seasons = _season_h2h(tourney, home, away)
+    out["seasons"] = seasons
+
+    # Oran golu: ayni fiyata, ayni dizilisle oynanmis son maclar.
+    out["odds_goal"] = _odds_goal(match, pool or [])
+    return out
+
+
+def _attach_h2h(rows: list[dict]) -> None:
+    """Listedeki her maca karsilasma gecmisini ekler.
+
+    Sezon tablosu turnuva basina BIR kez okunur; her mac icin ayri sorgu
+    atmak 1660 satirlik tabloyu mac sayisi kadar tekrar okurdu.
+    """
+    tourneys = _league_tourneys()
+    cache: dict[int | None, tuple] = {}
+    pools: dict[int | None, list[dict]] = {}
+    for m in rows:
+        t = m.get("tourney_id") or tourneys.get(m.get("champ_id"))
+        if t not in cache:
+            cache[t] = _season_positions(t)
+        champ = m.get("champ_id")
+        if champ not in pools:
+            pools[champ] = _prediction_pool(champ, seasons=0)
+        m["h2h"] = _h2h(m, cache[t], tourney=t, pool=pools[champ])
+
+
+@router.get("/matches/{event_id}/h2h")
+def match_h2h(event_id: int):
+    """Bu macin iki takimi arasindaki gecmis maclar."""
+    m = _row("SELECT event_id, champ_id, home, away, tourney_id FROM matches "
+             "WHERE event_id = ?", (event_id,))
+    if not m:
+        raise HTTPException(404, "mac bulunamadi")
+    t = m["tourney_id"] or _league_tourneys().get(m["champ_id"])
+    return _h2h(m, _season_positions(t), tourney=t,
+                lines=_totals_by_event([event_id]).get(event_id))
+
+
+def _prediction_pool(champ_id: int | None = None,
+                     seasons: int = PREDICT_POOL_SEASONS) -> list[dict]:
     """Tahmin havuzu: skoru ve mac oncesi 1X2 orani bilinen BITEN maclar.
 
     Tek sorgu ile cekilip bellekte suzuluyor; arsiv kucuk (yuzlerce satir) ve
@@ -791,18 +1523,42 @@ def _prediction_pool(champ_id: int | None = None) -> list[dict]:
     champ_id verilmeli: havuz LIGE OZELDIR. Ligler ayni oyunun farkli
     formatlari (5x5 Rush ~7 gol, 3x3 daha az) - birinin arsivi otekinin
     'form' ve 'benzer oranli mac' bilesenlerini bozar.
+
+    Havuz son PREDICT_POOL_SEASONS sezonla sinirli. Pencere LIG BASINA
+    hesaplaniyor: iteration numaralari turnuvalar arasinda cakisiyor
+    (149: 1-56, 129: 1-219), tek bir esik iki ligden birini bombos birakirdi.
     """
     where, args = "", ()
     if champ_id is not None:
         where, args = " AND m.champ_id = ?", (champ_id,)
-    return _rows(f"""
-        SELECT m.event_id, m.champ_id, m.home, m.away, m.start_ts,
+    rows = _rows(f"""
+        SELECT m.event_id, m.champ_id, m.iteration, m.home, m.away, m.start_ts,
                m.score_home, m.score_away, p.p1, p.px, p.p2
         FROM matches m JOIN ({PREMATCH_ODDS}) p ON p.event_id = m.event_id
         WHERE m.status = 'finished' AND m.score_home IS NOT NULL
               AND m.score_away IS NOT NULL AND p.p1 IS NOT NULL
               AND p.p2 IS NOT NULL{where}
         ORDER BY m.start_ts DESC""", args)
+    return _last_seasons(rows, seasons)
+
+
+def _last_seasons(rows: list[dict], n: int) -> list[dict]:
+    """Satirlari her ligin SON n sezonuyla sinirlar.
+
+    Sezonu bos olan satirlar elenir - hangi sezona dustuklerini bilmiyoruz,
+    "son 4 sezon" diye gosterilen bir kumeye emin olmadan koyamayiz.
+    """
+    if n <= 0:
+        return rows
+    keep: dict[int, set] = {}
+    by_champ: dict[int, set] = {}
+    for r in rows:
+        if r.get("iteration") is not None:
+            by_champ.setdefault(r["champ_id"], set()).add(r["iteration"])
+    for champ, its in by_champ.items():
+        keep[champ] = set(sorted(its, reverse=True)[:n])
+    return [r for r in rows if r.get("iteration") is not None
+            and r["iteration"] in keep.get(r["champ_id"], ())]
 
 
 def _season_rows(tourney_id: int | None) -> list[dict]:
@@ -921,50 +1677,59 @@ def _apply_remaining(e: dict, match: dict, now: float,
 def _attach_expectations(rows: list[dict]) -> None:
     """Her maca mac oncesi oranlardan cikan gol beklentisini ekler.
 
-    Referans set ('prekickoff') varsa o, yoksa acilis seti kullanilir - mac
-    basladiktan sonra site oranlari sildigi icin baska kaynak yok.
+    Kullanilan set: referans ('prekickoff') varsa o, yoksa acilis ('prematch')
+    - mac basladiktan sonra site oranlari sildigi icin baska kaynak yok.
+
+    ACILIS setinin ayri bir beklenti olarak tasinmasi DENENDI ve birakildi:
+    arsivdeki 400 macin 399'unda acilis ('prematch') ile kickoff oncesi
+    ('prekickoff') set birebir ayni ham beklentiyi veriyor - aralarinda medyan
+    24 dakika olmasina ragmen. Kitap Toplam Gol cizgilerini mac oncesinde
+    oynatmiyor; ayri bir sayi olarak yazmak ayni rakami iki kez gostermek
+    olurdu. Ekranda beklentinin yanindaki ikinci sayi bu yuzden HAM deger
+    (kalibrasyon oncesi, expect.total_raw).
+
+    Sorgular TOPLU: eskiden mac basina iki sorgu atiliyordu (1500 maclik bir
+    listede 3000 sorgu). Simdi snapshot'lar tek, degerler tek sorguda geliyor.
     """
+    from .collector import PHASE_OPEN, PHASE_REF
+    if not rows:
+        return
+    ids = [m["event_id"] for m in rows]
+    marks = ",".join("?" * len(ids))
+
+    # 1) her macin referans ve acilis snapshot'lari
+    snaps: dict[int, dict[str, int]] = {}
+    for r in _rows(f"SELECT id, event_id, phase FROM odds_snapshots "
+                   f"WHERE event_id IN ({marks})", tuple(ids)):
+        snaps.setdefault(r["event_id"], {})[r["phase"]] = r["id"]
+
+    # Yalnizca KULLANILAN set okunuyor. Iki fazi da cekmek satir sayisini
+    # ikiye katliyordu ve acilis seti artik ayri bir sayi uretmiyor.
+    used_by_event = {ev: (by_phase.get(PHASE_REF) or by_phase.get(PHASE_OPEN))
+                     for ev, by_phase in snaps.items()}
+    wanted = {sid for sid in used_by_event.values() if sid}
+    values: dict[int, list[dict]] = {}
+    if wanted:
+        wl = list(wanted)
+        # SQLite'in degisken sinirina takilmamak icin parcali okunuyor.
+        for i in range(0, len(wl), 400):
+            chunk = wl[i:i + 400]
+            cm = ",".join("?" * len(chunk))
+            for v in _rows(f"SELECT snapshot_id, g, t, p, coef, blocked "
+                           f"FROM odds_values WHERE snapshot_id IN ({cm})",
+                           tuple(chunk)):
+                values.setdefault(v["snapshot_id"], []).append(v)
+
     now = time.time()
     minutes = _league_match_minutes()
     for m in rows:
-        snap = _expectation_snapshot(m["event_id"])
-        e = goal_expectation(
-            _rows("SELECT g, t, p, coef, blocked FROM odds_values WHERE snapshot_id=?",
-                  (snap["id"],))) if snap else None
+        used = used_by_event.get(m["event_id"])
+        e = goal_expectation(values.get(used, [])) if used else None
         m["expect"] = e
         if e:
             _apply_remaining(e, m, now,
                              minutes.get(m.get("champ_id"), LIVE_MATCH_MINUTES))
 
-
-def _goal_distribution(live: list[dict]) -> dict | None:
-    """Bahisci oranlarinin ima ettigi toplam gol dagilimi (market G=9939).
-
-    G=9939 tam bir market: secenekler P=3..13 toplam gol, kitap toplami ~1.2.
-    Oranlari olasiliga cevirip marji cikarmak icin normalize ediyoruz.
-
-    Snapshot secimi _attach_expectations ile AYNI olmali (referans set once):
-    aksi halde ayni mac icin bu panelin "en olasi" degeri gol beklentisi
-    tablosundakiyle uyusmuyor. Bu yuzden secim _expectation_snapshot'ta.
-    """
-    for m in live:
-        snap = _expectation_snapshot(m["event_id"])
-        rows = _rows("SELECT p AS goals, coef FROM odds_values "
-                     "WHERE g = 9939 AND snapshot_id = ? ORDER BY p",
-                     (snap["id"],)) if snap else []
-        if not rows:
-            continue
-        book = sum(1 / r["coef"] for r in rows if r["coef"])
-        if not book:
-            continue
-        return {
-            "event_id": m["event_id"], "home": m["home"], "away": m["away"],
-            "start_ts": m["start_ts"], "margin": round((book - 1) * 100, 1),
-            "bins": [{"goals": int(r["goals"]), "coef": r["coef"],
-                      "prob": round(100 * (1 / r["coef"]) / book, 2)}
-                     for r in rows if r["coef"]],
-        }
-    return None
 
 
 def _season_trends(champ_id: int | None = None) -> list[dict]:

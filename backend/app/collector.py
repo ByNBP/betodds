@@ -16,7 +16,8 @@ import time
 from . import db
 from .config import (FINISH_GRACE_SECONDS, MISSING_TICKS_TO_FINISH, POLL_SECONDS,
                      League, load_leagues)
-from .feed import FeedClient, flatten_outcomes, parse_match
+from .feed import FeedClient, _int, flatten_outcomes, parse_match
+from .markets import SKIP_GROUPS
 
 
 class Broadcaster:
@@ -261,9 +262,18 @@ class Collector:
         except Exception as ex:                        # noqa: BLE001
             db.log("warn", f"snapshot {event_id}: {ex}")
             return False
+        # Turnuva/sezon meta'si YALNIZCA GetGameZip'te geliyor; liste ucu
+        # (Get1x2_VZip) bu alanlari hic gondermiyor ve matches.iteration bu
+        # yuzden bos kaliyordu. Snapshot zaten bu yaniti aldigi icin buradan
+        # geri yaziyoruz - lig sirasini macin OYNANDIGI sezona gore
+        # gosterebilmek icin gerekli.
+        self._save_meta(event_id, game)
+
         groups = (game or {}).get("GE") or []
         values = []
         for ge in groups:
+            if ge.get("G") in SKIP_GROUPS:   # kullanilmayan pazarlar kaydedilmiyor
+                continue
             for o in flatten_outcomes(ge.get("E")):
                 values.append((ge.get("G"), ge.get("GS"), o.get("T"), o.get("P"),
                                o.get("C"), 1 if o.get("B") else 0))
@@ -297,6 +307,22 @@ class Collector:
         broadcaster.publish({"type": "snapshot", "event_id": event_id,
                              "phase": phase, "count": len(values)})
         return True
+
+    def _save_meta(self, event_id: int, game: dict | None) -> None:
+        """GetGameZip yanitindaki id_tourney / iteration degerlerini isler."""
+        # DIKKAT: meta SC.S altinda. Kokteki "S" macin baslangic zaman
+        # damgasi (int) - onu donmeye calismak TypeError veriyor.
+        sc = (game or {}).get("SC") or {}
+        meta = {d.get("Key"): d.get("Value")
+                for d in (sc.get("S") or []) if isinstance(d, dict)}
+        tourney, iteration = _int(meta.get("id_tourney")), _int(meta.get("iteration"))
+        if tourney is None and iteration is None:
+            return
+        with db.session() as con:
+            con.execute(
+                "UPDATE matches SET tourney_id = COALESCE(?, tourney_id), "
+                "iteration = COALESCE(?, iteration) WHERE event_id = ?",
+                (tourney, iteration, event_id))
 
     def _close_missing(self, seen: set[int], fetched: set[int], now: int) -> int:
         """Feed'den dusen maclari bitmis say - TUM acik kayitlar icin.

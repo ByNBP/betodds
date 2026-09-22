@@ -147,7 +147,29 @@ pypi'ye ve npm'e çıkar.
 Proxy stratejisi tutmazsa `docker-compose.yml` içindeki `CIADPI_ARGS` değerini
 `-q 1+s` veya `-r 1+s` yapıp `docker compose up -d --force-recreate proxy`.
 
-### Linux / macOS
+### Linux
+
+Kendi paketi var — ayrıntısı `LINUX-README.md`:
+
+```bash
+tar xzf betodds-linux-*.tar.gz && cd betodds && ./KURULUM.sh
+```
+
+Hedef makinede gereken tek şey **Python 3.10+**. Bağımlılık wheel'leri
+(cp310–cp313), derlenmiş arayüz ve veritabanı paketin içinde; **ağ erişimi
+gerekmez**. `KURULUM.sh` venv'i kurar, gerekiyorsa DPI bypass proxy'sini
+derleyip başlatır, backend'i ayağa kaldırır ve `/api/health` ile doğrular.
+
+Sonrası: `./BASLAT.sh`, `./DURUM.sh`, `./DURDUR.sh`.
+Oturum kapansa da toplansın diye: `./KURULUM.sh --systemd`.
+
+Paketi üretmek (kaynak makinede):
+
+```bash
+./build-frontend.sh && ./scripts/vendor-indir-linux.sh && ./scripts/paket-linux.sh
+```
+
+### macOS
 
 ```bash
 tar xzf betodds-*.tar.gz && cd betodds && ./scripts/setup.sh
@@ -195,6 +217,9 @@ o yüzden sabit yazmak yerine her kurulumda yeniden tespit edilir.
 ./dev.sh            # backend + Vite dev sunucusu (5173), anlık yenileme
 ./build-frontend.sh # sadece frontend derlemesi
 ```
+
+Kurulmuş bir Linux paketinde proxy'yi de yöneten sarmalayıcılar:
+`./BASLAT.sh`, `./DURUM.sh`, `./DURDUR.sh`.
 
 İlk kurulum backend için:
 
@@ -314,6 +339,30 @@ sezon gücü `tourney_id` ile sınırlanır. Sebebi ölçülebilir: 5x5 Rush ma�
 Aynı nedenle `iteration` numaraları turnuvalar arasında çakıştığı için
 (149: 1-56, 129: 1-219) sezon sorguları her zaman `tourney_id` ile filtrelenir.
 
+## Beklenen gol kalibrasyonu
+
+Gösterilen beklenti, marketten çıkan **ham** değer değil:
+
+```
+ham beklenti − 0.5  →  en yakın 0.5 katına yuvarla
+14.85 − 0.5 = 14.35 → 14.5
+```
+
+Sabitler `config.py` içinde (`BETODDS_EXPECT_OFFSET`, `BETODDS_EXPECT_STEP`).
+İşlem arayüzde açıkça yazılır (kartta `(14.85 − 0.5)`, hücrede tam işlem
+ipucu olarak) — gösterilen sayının türetilmiş olduğu gizlenmiyor.
+
+**Kural tahminin çıkışına uygulanır, girdilerine değil.** Harman
+(`predict.py`) bileşenleri ham değerlerle çalışır; kalibrasyon hem oran
+bileşenine hem harmana uygulansaydı düzeltme iki kez inerdi. Ham değerler
+`total_raw` / `home_raw` / `away_raw` olarak API'de durur.
+
+Kalibrasyondan **etkilenenler**: alt/üst çizgi seçimi (beklentiye en yakın
+çizgi), ev/deplasman ayrışımı (pay kesin skordan, seviye kalibre toplamdan),
+canlı maçta kalan gol beklentisi, ve `expect_hit` ("beklenti tuttu")
+ölçütü — 1002 maçlık arşivde tutma oranı %49.8'den %52.1'e çıktı, çünkü
+beklenti alt sınır gibi okunuyor ve alt sınır düştü.
+
 ## Referans oranlar ve sonuçlandırma
 
 **Geçerli oranlar, maçın başlamasından hemen önceki settir.** Maç içinde oranlar
@@ -394,14 +443,30 @@ sözlüğe çevirip sıralamayı bozmayın.
 | Uç | Açıklama |
 |---|---|
 | `GET /api/health` | Toplayıcı durumu + DB sayaçları |
+| `GET /api/leagues` | İzlenen ligler (kısa ad, tourney_id) |
+| `GET /api/dashboard` | Lig sayfasının tüm verisi (`champ_id` ile daralır) |
 | `GET /api/live` | Devam eden ve yaklaşan maçlar |
+| `GET /api/results` | Biten maçlar — `hit=yes/no` ile beklenti filtresi |
 | `GET /api/matches` | Filtreli maç listesi (`team`, `champ_id`, `status`) |
+| `GET /api/matches/{id}/h2h` | Karşılaşma geçmişi, son sezonlar, aynı oranlı maçlar, bahis önerisi |
+
+"Aynı oranlı maçlar" ölçütü: takımın kendi ayağı ±`BETODDS_SAME_ODDS_GAP`
+(0.02) yakın olacak **ve** 1/X/2 ayaklarından en az
+`BETODDS_SAME_ODDS_MIN_LEGS` (2) tanesi tutacak. Ayaklar takımın bakış
+açısıyla hizalanır (kendi oranı, beraberlik, rakip oranı), yani takım
+geçmişte diğer tarafta oynadıysa 1 ile 2 yer değiştirir.
+
 | `GET /api/matches/{id}/odds` | Maç öncesi tam market seti (etiketlenmiş) |
 | `GET /api/matches/{id}/ticks` | Oran hareketi zaman serisi |
+| `GET /api/coverage` | Maç öncesi arşiv kapsaması (`champ_id`) |
 | `GET /api/stats/teams` | Bizim arşivden takım formu |
 | `GET /api/stats/seasons` | eventsstat sezon tabloları |
-| `POST /api/stats/seasons/sync` | Sezon tablolarını çeker |
+| `POST /api/stats/seasons/sync` | Sezon tablolarını + o sezonun maçlarını çeker |
 | `GET /api/stream` | SSE — her poll'da olay |
+
+Arayüz üç sayfa: her ligin kendi **canlı** sayfası (`/lig/<champ_id>`),
+**Arşiv** ve **Sonuçlar**. Lig seçimi uygulama geneli; canlı sekmeleri,
+Arşiv'deki ve Sonuçlar'daki lig anahtarı aynı seçimi paylaşır.
 
 Tam liste: `http://localhost:8000/docs`
 

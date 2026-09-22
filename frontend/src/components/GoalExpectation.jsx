@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { fmtOdd, fmtTime } from '../format.js'
+import { adjustText, fmtOdd, fmtTime } from '../format.js'
 
 /**
  * Iki ayri sayi yan yana:
@@ -53,7 +53,14 @@ export default function GoalExpectation({ matches }) {
                     </td>
                     <td className="num">{e.home?.toFixed(2) ?? '—'}</td>
                     <td className="num">{e.away?.toFixed(2) ?? '—'}</td>
-                    <td className="num"><strong>{e.total.toFixed(2)}</strong></td>
+                    <td className="num" title={adjustText(e) || undefined}>
+                      <strong>{e.total.toFixed(2)}</strong>
+                      {e.total_raw != null && (
+                        <div className="adjust-note">
+                          {e.total_raw.toFixed(2)} − {e.adjust?.offset ?? 0.5}
+                        </div>
+                      )}
+                    </td>
                     <td className="num">
                       {m.predict?.total != null ? (
                         <Link to={`/mac/${m.event_id}#tahmin`}

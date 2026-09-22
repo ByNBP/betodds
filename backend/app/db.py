@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS matches (
   -- Mac basladiginda elimizde tam bir mac-oncesi arsiv yoksa 1 olur.
   -- Geriye donuk doldurulamaz (site bitmis macin oranlarini siliyor),
   -- bu yuzden kapsama acigini sayabilmek icin kalici olarak isaretliyoruz.
-  prematch_missed INTEGER DEFAULT 0
+  prematch_missed INTEGER DEFAULT 0,
+  -- Kaydin kaynagi: NULL = toplayicinin kendi yakalamasi, 'bulten' =
+  -- disaridan ice aktarildi (backend/import_bulletin.py).
+  source      TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_matches_champ  ON matches(champ_id, start_ts DESC);
 CREATE INDEX IF NOT EXISTS ix_matches_status ON matches(status, start_ts DESC);
@@ -96,6 +99,23 @@ CREATE TABLE IF NOT EXISTS season_tables (
   PRIMARY KEY (tourney_id, iteration, team)
 );
 
+-- eventsstat sezon sayfasindaki capraz sonuc tablosu: her hucre BIR mac.
+-- 'positions' dizisinde satir takimi EVDE, sutun takimi deplasmandadir
+-- (dogrulandi: hucre toplamlari puan durumunun averajiyla birebir tutuyor).
+-- Oran YOK - bu kayitlar bizim arsivimizden degil, sitenin sezon ozetinden.
+CREATE TABLE IF NOT EXISTS season_matches (
+  tourney_id INTEGER NOT NULL,
+  iteration  INTEGER NOT NULL,
+  home       TEXT NOT NULL,
+  away       TEXT NOT NULL,
+  score_home INTEGER,
+  score_away INTEGER,
+  fetched_at INTEGER,
+  PRIMARY KEY (tourney_id, iteration, home, away)
+);
+CREATE INDEX IF NOT EXISTS ix_season_matches_pair
+  ON season_matches(tourney_id, home, away);
+
 CREATE TABLE IF NOT EXISTS collector_log (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   ts        INTEGER,
@@ -127,6 +147,11 @@ def session():
 
 MIGRATIONS = [
     ("matches", "prematch_missed", "INTEGER DEFAULT 0"),
+    # Kaydin nereden geldigi. Bos/NULL = toplayicinin kendi yakalamasi.
+    # 'bulten' = disaridan ice aktarilan PDF listesi (import_bulletin.py):
+    # oranlari birebir dogrulandi ama skorlari kismi olabiliyor, ve mac
+    # oncesi tam market seti YOK - bu yuzden "beklenen gol" hesaplanamaz.
+    ("matches", "source", "TEXT"),
 ]
 
 

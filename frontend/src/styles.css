@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #0f1218;
   --panel: #171b24;
   --panel-2: #1e2430;
@@ -18,12 +19,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Calibri istendi. Linux'ta genelde yok; Carlito olcu olarak birebir
+     esdegeri (ayni genislikler), o da yoksa sistem yazitipine duselir. */
+  font: 14px/1.5 Calibri, Carlito, "Segoe UI", system-ui, -apple-system,
+        Roboto, sans-serif;
 }
 
 a { color: inherit; text-decoration: none; }
 
-.app { max-width: 1180px; margin: 0 auto; padding: 0 16px 48px; }
+.app { max-width: 1400px; margin: 0 auto; padding: 0 16px 48px; }
 
 /* ---------------------------------------------------------------- header */
 header.top {
@@ -92,6 +96,41 @@ h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
 .card .score { font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
   min-width: 62px; text-align: center; }
 .card .score.pending { font-size: 13px; color: var(--muted); font-weight: 500; }
+/* Takim adinin altindaki baslangic orani. Basladigi fiyat referans, guncel
+   fiyat degil - o yuzden sonuk ve kucuk; asagidaki 1/X/2 kutulariyla
+   karistirilmamali. */
+.card .start-odd { font-size: 11px; font-weight: 500; color: var(--muted);
+  margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* Takim adinin yanindaki lig sirasi - kucuk ve mavi, adi bastirmasin. */
+
+/* ------------------------------------------------------------- taktik */
+/* Uyari kutusu bilerek yuksek kontrastli: kullanici mac akarken goz ucuyla
+   yakalayacak. Yanip sonme opacity uzerinden - arka plan/kenarlik
+   animasyonu her karede yeniden boyama tetikliyordu. */
+.tactics { background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 14px; }
+.tactics-head { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.tactic-alert { border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 16%, var(--panel-2));
+  border-radius: 8px; padding: 10px 12px; text-align: center; }
+.tactic-alert + .tactic-alert { margin-top: 8px; }
+.tactic-text { font-size: 18px; font-weight: 800; letter-spacing: -0.2px;
+  color: var(--warning); animation: tactic-blink 1s steps(1, end) infinite; }
+.tactic-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+@keyframes tactic-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: .25; } }
+/* Yanip sonmeyi kapatmis kullanicilarda sabit kalsin (WCAG 2.3.1). */
+@media (prefers-reduced-motion: reduce) {
+  .tactic-text { animation: none; }
+}
+
+/* Kalibrasyon islemi: gosterilen beklenti ham degil, bu not onu soyluyor.
+   Sonuk ve kucuk - sayinin kendisiyle yarismamali. */
+/* Kalibrasyon oncesi ham beklenti. MAVI: gosterilen sayidan tureyen degil,
+   ONDAN ONCEKI deger oldugu belli olsun. */
+.adjust-note { font-size: 10px; color: var(--accent); font-weight: 500;
+  font-variant-numeric: tabular-nums; }
+.expect .adjust-note { margin-left: 2px; }
 
 .odds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .odd { background: var(--panel-2); border: 1px solid var(--line);
@@ -103,12 +142,34 @@ h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
   background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
 .badge.live { background: #3a1717; border-color: #6b2a2a; color: #ff9f9f; }
 .badge.arch { background: #17263a; border-color: #2a4a6b; color: #9fd0ff; }
+.badge.done { background: #1c2a1c; border-color: #2f4a2f; color: #a7dca7; }
+
+/* Son biten maclar tablosu - sayfanin tepesinde. Kompakt: bes satir ust
+   uste duracagi icin kart yerine tablo, satirlar dar. */
+.recent-finished { padding: 14px 16px; margin-bottom: 16px; }
+.recent-finished table { font-size: 12px; }
+.recent-finished th, .recent-finished td { padding: 6px 8px; white-space: nowrap; }
+.recent-finished a:hover { color: var(--accent); }
+/* Beklenen gol tuttuysa (yuvarlanmis beklenti = gercek toplam) yesil. */
+/* Toplam gol beklentiyi asan maclar. Satir hafif yesil zemin alir; sayi ve
+   tik daha koyu - satirin tamami yesile boyanirsa tablo okunmaz oluyor. */
+td.hit-ok { color: var(--up); font-weight: 700; }
+/* Tutmayan tahmin. Yalnizca tahminin GERCEKTEN uretildigi hucrelerde
+   konuyor: mac oncesi arsivi olmayan maclarda hucre bos kalir ve kirmizi
+   isaretlenmez - "tutmadi" ile "olculemiyor" ayri seyler. */
+td.hit-no { color: var(--down); font-weight: 700; }
+tr.hit-row { background: rgba(74, 222, 128, 0.07); }
+tr.hit-row:hover { background: rgba(74, 222, 128, 0.13); }
+.tick { margin-left: 5px; font-weight: 700; }
 
 /* ---------------------------------------------------------------- tablolar */
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+/* Basliklar TEK SATIR: "Ilk tutan alt" gibi iki kelimelik basliklar sarinca
+   satir yuksekligi ikiye katlaniyor ve tablo okunmaz hale geliyordu. Sayfa
+   genisligi (1400px) bunun icin yeterli. */
 th { color: var(--muted); font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: 0.4px; }
+  text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--panel-2); }
 .scroll-x { overflow-x: auto; }
@@ -123,6 +184,20 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 /* Oran filtresi: dar sayi kutulari, etiketler kutularla ayni hizada. */
 .odds-filter { align-items: center; margin-top: -6px; }
 .odds-filter input { width: 84px; }
+/* Tarih seridi: kutular ve hazir aralik butonlari tek hizada. */
+.date-filter { align-items: center; }
+.date-filter input[type="date"] { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- sayfalama */
+.pager { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 14px; }
+/* Numaralar esit genislikte olsun ki serit sayfa degistikce ziplamasin. */
+.pager button { padding: 6px 11px; font-variant-numeric: tabular-nums; }
+.pager button:disabled { opacity: 0.45; cursor: default; border-color: var(--line); }
+.pager-gap { color: var(--muted); padding: 0 2px; }
+/* "Sayfaya git" kutusu seridin sagina yaslanir - numaralarla karismasin. */
+.pager-jump { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.pager-jump input { width: 72px; padding: 6px 8px; }
 /* Kart icindeki gol beklentisi - mini grafigin yerini aldi. */
 .expect { display: flex; align-items: baseline; gap: 8px; font-size: 13px;
   padding: 8px 0; min-height: 34px; }
@@ -130,6 +205,10 @@ button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #06121f;
   font-weight: 600; }
+/* Buton icindeki sayac: aktif butonda koyu zemin uzerinde sonuk gri okunmuyor,
+   ayni koyu rengin saydami kullaniliyor. */
+button .muted { color: var(--muted); }
+button.primary .muted { color: rgba(6, 18, 31, 0.65); }
 
 /* ------------------------------------------------------------- market grid */
 .market { margin-bottom: 18px; }
@@ -175,6 +254,17 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   line-height: 1.1; font-variant-numeric: tabular-nums; }
 .tile .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
+/* Sayfa altligi: sayac seridi. Ust bandin aksine burasi "arka plan bilgisi",
+   o yuzden daha sakin - cerceve yok, rakamlar kucuk, ayrimi tek bir ust
+   cizgi yapiyor. */
+.page-footer { margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--line); }
+.page-footer .tiles { margin-bottom: 0; gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.page-footer .tile { background: transparent; border: 0; padding: 0 8px; }
+.page-footer .tile .v { font-size: 19px; letter-spacing: -0.4px; }
+.page-footer .tile .k { margin-bottom: 2px; }
+
 /* Kart icindeki mini oran grafigi */
 .spark { height: 46px; margin: 10px -4px 2px; }
 
@@ -183,6 +273,45 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .odd .swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 
 .grid-2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+
+/* Mac satiri: solda kart, saginda karsilasma gecmisi. Kart sabit genislikte
+   kalir (icindeki 1/X/2 kutulari daralinca okunmaz oluyor), kalan yeri tablo
+   alir. Dar ekranda alt alta duserler. */
+.match-rows { display: grid; gap: 12px; }
+/* Sol sutun: mac karti + altinda taktik kutusu. */
+.match-left { display: grid; gap: 12px; align-content: start; }
+.match-row { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); }
+@media (max-width: 900px) { .match-row { grid-template-columns: 1fr; } }
+
+.h2h { padding: 14px 16px; }
+.h2h h3 { margin-bottom: 6px; }
+.h2h-sum { font-size: 13px; margin-bottom: 10px; }
+.h2h table { font-size: 12px; }
+.h2h th, .h2h td { padding: 6px 8px; white-space: nowrap; }
+.h2h-note { font-size: 11px; margin-top: 10px; line-height: 1.45; }
+/* Takim adinin yanindaki lig sirasi. TEK kural: kartta ve tablolarda ayni
+   renk, ayni boyut, ayni agirlik. Eskiden kartta 11px normal metin, gecmis
+   tablosunda 10px <sup> idi - ayni sey iki farkli bicimde gorunuyordu. */
+.team-pos { color: var(--accent); font-size: 11px; font-weight: 600;
+  margin: 0 4px; font-variant-numeric: tabular-nums; }
+/* Ayni oranli maclar tablosunda eslesmeyi saglayan takim ve onun orani.
+   X olcute girmedigi icin hicbir zaman vurgulanmaz. */
+.h2h td.hit { color: var(--accent); font-weight: 600; }
+/* Eslesmeyi saglayan takim; karsilasma gecmisi tablosunda iki takim da bizim
+   oldugu icin bu isaret hic konmuyor. */
+.h2h .ours { font-weight: 600; }
+.h2h td.pos { color: var(--up); }
+.h2h td.neg { color: var(--muted); }
+/* Ilk baslik satiri: solda bolum adi, sagda macin beklenen golu. Ikisi de
+   h3 tipografisinde - beklenen gol bir baslik degil ama ayni satirda durdugu
+   icin ayni puntoda olmasi satiri dengeliyor. */
+.h2h-title { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.h2h-title h3 { margin: 0; }
+.h2h-expect { text-align: right; white-space: nowrap; }
+.h2h-expect strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+.h2h-expect .muted { font-variant-numeric: tabular-nums; }
 .chart-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
   margin-bottom: 4px; }
 .chart-head h2 { margin: 0; }
@@ -252,3 +381,51 @@ tbody tr.hot td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .formula { font-variant-numeric: tabular-nums; font-size: 14px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   padding: 12px 14px; }
+
+/* ================================================== yazdirma / PDF disa aktarma
+ * Sonuclar sayfasindaki "PDF" butonu filtrenin TUM satirlarini cekip
+ * .print-sheet icine basar ve window.print() cagirir; kullanici yazdirma
+ * penceresinde hedefi "PDF olarak kaydet" secer. Ayri bir PDF kutuphanesi
+ * YOK - cevrimdisi kuruluma yeni bagimlilik girmesin diye, ve tarayici
+ * Turkce karakterleri kendi yazi tipiyle dogru gomuyor.
+ *
+ * Kurallar body.printing ile kapsanmis: buton kullanilmadan yapilan duz bir
+ * Ctrl+P, uygulamanin geri kalaninda oldugu gibi davranmaya devam eder.
+ */
+.print-sheet { display: none; }
+
+@media print {
+  body.printing { background: #fff; color: #000; }
+  body.printing .app { max-width: none; padding: 0; }
+  body.printing header.top,
+  body.printing .league-switch,
+  body.printing .controls,
+  body.printing .pager,
+  body.printing .panel { display: none !important; }
+
+  body.printing .print-sheet { display: block; }
+  body.printing .print-head { margin-bottom: 10px; }
+  body.printing .print-head h1 { font-size: 15px; margin: 0 0 4px; }
+  body.printing .print-meta { display: flex; flex-wrap: wrap; gap: 4px 14px;
+    font-size: 10px; color: #444; }
+
+  body.printing .print-sheet table { font-size: 9.5px; }
+  body.printing .print-sheet th, body.printing .print-sheet td {
+    padding: 3px 6px; border-bottom: 1px solid #ccc; color: #000;
+    white-space: nowrap; }
+  body.printing .print-sheet th { color: #444; border-bottom: 1px solid #666; }
+  body.printing .print-sheet a { color: #000; }
+  body.printing .print-sheet .muted { color: #666; }
+  /* Baslik her sayfada tekrarlansin; satirlar sayfa sonunda ikiye bolunmesin. */
+  body.printing .print-sheet thead { display: table-header-group; }
+  body.printing .print-sheet tr { page-break-inside: avoid; break-inside: avoid; }
+  /* Beklentiyi asan maclar ekranda oldugu gibi isaretli kalsin - tarayicilar
+     arka plani varsayilan olarak basmaz, acikca istiyoruz. */
+  body.printing .print-sheet td.hit-ok { color: #0a7a0a; font-weight: 700; }
+  /* Tutmayan tahmin PDF'te de okunsun - ekranda kirmizi olan cikti da
+     kirmizi olmali, yoksa iki gorunum ayni seyi anlatmiyor. */
+  body.printing .print-sheet td.hit-no { color: #b32020; font-weight: 700; }
+  body.printing .print-sheet tr.hit-row {
+    background: #edf9ed;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

@@ -93,23 +93,27 @@ denenecek ilk seylerden biri bu satiri yorum yapmaktir.
 Maç başına iki sayı gösteriliyor:
 
 * **Beklenti** — maç öncesi oranların ima ettiği gol sayısı (marj çıkarılmış).
-* **Tahmin** — dört etmenin ağırlıklı harmanı (`backend/app/predict.py`).
+* **Tahmin** — beş etmenin ağırlıklı harmanı (`backend/app/predict.py`).
 
-Çarpanlar arşiv üzerinde leave-one-out ölçülerek seçildi:
+Çarpanlar **elle ayarlandı**; yanlarındaki MAE değerleri dört etmenli önceki
+sürümde leave-one-out ile ölçülen değerlerdir, bir taramanın sonucu değildir:
 
 | etmen | çarpan | tek başına hata (MAE) | ortam değişkeni |
 |---|---|---|---|
-| sezon gücü (puan durumları) | 0.45 | 1.65 | `BETODDS_W_SEASON` |
-| oran beklentisi | 0.40 | 1.67 | `BETODDS_W_ODDS` |
-| form (bizim arşivimiz) | 0.10 | 1.77 | `BETODDS_W_FORM` |
-| benzer oranlı maçlar | 0.05 | 2.17 | `BETODDS_W_SIMILAR` |
+| sezon gücü (puan durumları) | 0.25 | 1.65 | `BETODDS_W_SEASON` |
+| oran beklentisi | 0.20 | 1.67 | `BETODDS_W_ODDS` |
+| saha etkisi (ev/dep. formu) | 0.15 | — | `BETODDS_W_VENUE` |
+| form (bizim arşivimiz) | 0.15 | 1.77 | `BETODDS_W_FORM` |
+| benzer oranlı maçlar | 0.25 | 2.17 | `BETODDS_W_SIMILAR` |
 | *taban: arşiv ortalaması* | — | 1.93 | — |
 
-Harmanın kendi hatası 1.74. `benzer` etmeni tek başına tabandan bile kötü
-olduğu için çarpanı düşük: 0.10 yapılırsa 1.76, 0.25 yapılırsa 1.82'ye çıkıyor.
-Dört etmen de aktif kalacak şekilde taranan en iyi bileşim yukarıdaki.
-MAE'nin standart hatası ~0.17 olduğundan bu farklar istatistiksel olarak
-anlamlı değil; çarpanları kendin denemek istersen ortam değişkenleri hazır.
+Mevcut arşiv üzerinde ölçülen hata (leave-one-out): 5x5 Rush'ta **1.96**
+(taban 2.04, n=84), 3x3'te **2.74** (taban 2.83, n=28). Önceki dört etmenli
+çarpanlar aynı arşivde 1.91 / 2.70 veriyor — yani yeni bileşim bir tık geride.
+MAE'nin standart hatası bu örneklem boyutunda ~0.15-0.20 olduğundan fark
+istatistiksel olarak anlamlı değil, ayrıca eski çarpanlar bu arşive bakılarak
+seçildiği için kendi lehine bir avantajı var. Çarpanları denemek istersen
+ortam değişkenleri hazır, yeniden derleme gerekmez.
 
 Diğer ayarlar: `BETODDS_PREDICT_SEASONS` (kaç sezon geriye, vars. 10),
 `BETODDS_PREDICT_CUR_W` (güncel sezonun ağırlığı, vars. 0.20),
@@ -178,7 +182,7 @@ ekleme adimlari icin `README.md` -> "Lig ekleme".
 
 | belirti | bak |
 |---|---|
-| Eski arayuz / eski davranis goruluyor | `runtime\`, `tools\` sil, kurulumu tekrar calistir. Docker yolunda: `docker compose down` + `docker image rm betodds:latest` + kurulum |
+| Eski arayuz / eski davranis goruluyor | `http://localhost:8000/api/health` -> `build` alani calisan arayuz paketini verir (or. `index-Ct07VQxx.js`). Yeni pakettekiyle (`frontend\dist\assets\`) ayni degilse eski surum calisiyordur: `docker compose down` + kurulumu tekrar calistir. Yerel yolda `runtime\`, `tools\` silip tekrar deneyin |
 | Veri guncellenmiyor | `http://127.0.0.1:8000/api/health` -> `collector.last_error`. Ayrica `/api/logs` |
 | Docker konteynerinden siteye cikilamiyor | VPN split-tunnel ise WSL2'yi kapsamaz. Test: `docker compose exec betodds curl -sS -o NUL -w "%{http_code}" https://betandyou-8229.pro/` |
 | `python.exe` acilmiyor | `runtime\python` klasorunu silip kurulumu tekrar calistir |

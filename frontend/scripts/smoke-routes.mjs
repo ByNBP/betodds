@@ -67,7 +67,7 @@ for (const l of leagues) {
   console.log(`\n=== ${l.name} (champ ${l.champ_id}) ===`)
   for (const [label, path] of [['Lig sayfası', `/lig/${l.champ_id}`],
                                ['Arşiv', '/arsiv'],
-                               ['İstatistik', '/istatistik']]) {
+                               ['Sonuçlar', '/sonuclar']]) {
     const r = await render(path, l.champ_id)
     check(`${label} render`, r.text.includes('BetOdds') && !r.text.includes('Sayfa bulunamadı'),
           `satır:${r.rows}`)
