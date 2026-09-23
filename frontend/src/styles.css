@@ -46,6 +46,7 @@ nav.tabs a.active { background: var(--panel-2); color: var(--text); }
 /* Arsiv ve Istatistik sayfalarinin hangi ligi gosterdigi kendi basliklarindan
    anlasilmiyor; son secilen ligin TAM adi burada duruyor. */
 .league-now { color: var(--text); font-weight: 500; }
+.season-now { color: var(--accent); font-weight: 600; }
 
 /* Sayfa ici lig anahtari (Arsiv). Segmentli grup: secenekler bitisik durur,
    aktif olan dolu zemin alir - hangi ligin listelendigi tek bakista belli. */

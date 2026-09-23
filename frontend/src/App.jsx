@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useParams } from 'react-router-dom'
 import { api, subscribe } from './api.js'
-import { fmtTime } from './format.js'
+import { fmtDateTime, fmtTime } from './format.js'
 import Live from './pages/Live.jsx'
 import Archive from './pages/Archive.jsx'
 import MatchDetail from './pages/MatchDetail.jsx'
@@ -26,6 +26,12 @@ function storedChamp() {
     const v = localStorage.getItem(CHAMP_KEY)
     return v ? Number(v) : null
   } catch { return null }          // gizli sekme / depolama kapali
+}
+
+/** Sezon rozetinin ipucu: ne zaman basladi, kac macini gorduk. */
+function seasonTitle(s) {
+  const of = s.season_matches ? ` / ${s.season_matches}` : ''
+  return `başlangıç ${fmtDateTime(s.since)} · arşivde ${s.matches}${of} maç`
 }
 
 /** /lig/:champId -> o ligin canli sayfasi. Secimi ust bilesene bildirir. */
@@ -56,6 +62,8 @@ export default function App() {
   // Her ligin KENDI sayfasi var. Ligler ayni oyunun cok farkli gol profilli
   // formatlari (5x5 Rush ~7 gol/mac, 3x3 ~13); tek bir karisik gorunum
   // hicbirini tarif etmiyordu.
+  // pulse'ta yeniden cekilir: basliktaki guncel sezon numarasi sayfa acik
+  // dururken de degisiyor (sezon 1-2 gunde bitiyor).
   useEffect(() => {
     let alive = true
     api.leagues().then((ls) => {
@@ -65,7 +73,7 @@ export default function App() {
       setChamp((c) => (ls.some((l) => l.champ_id === c) ? c : ls[0]?.champ_id ?? null))
     }).catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [pulse])
 
   useEffect(() => {
     if (champ == null) return
@@ -121,6 +129,11 @@ export default function App() {
 
         <div className="status">
           {league && <span className="league-now">{league.name}</span>}
+          {league?.season && (
+            <span className="season-now" title={seasonTitle(league.season)}>
+              {league.season.iteration}. sezon
+            </span>
+          )}
           <span><i className={`dot ${collectorState}`} />{collectorText}</span>
           <span>
             <i className={`dot ${stream === 'connected' ? 'ok' : 'warn'}`} />

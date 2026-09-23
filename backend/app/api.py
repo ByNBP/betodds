@@ -127,7 +127,37 @@ def leagues():
         # Sekme etiketi: tam ad ("FC 26. 5x5 Rush. Süper Lig") gezinme
         # cubugunda cok uzun. Verilmemisse tam ada duser.
         r["short_name"] = extra.get("short_name") or r["name"] or str(r["champ_id"])
+        r["season"] = _current_season(r["champ_id"])
     return rows
+
+
+def _current_season(champ_id: int) -> dict | None:
+    """Ligin su an oynanan sezonu (iteration).
+
+    En son BASLAYAN macin sezonu - yaklasan maclar dahil. MAX(iteration)
+    kullanilamaz: numaralar turnuvaya bagli, lig turnuva degistirirse
+    eski turnuvanin buyuk numarasi kazanirdi.
+
+    Sezonun kac mac surdugu eventsstat puan durumundaki takim sayisindan
+    (cift devre: n*(n-1)); tablo henuz cekilmemisse bilinmez, None doner.
+    'matches' bizim yakaladigimiz mac sayisi - toplayici durdugunda eksik
+    kalir, sezonun ilerleyisi diye okunmamali.
+    """
+    cur = _row("""SELECT tourney_id, iteration FROM matches
+                  WHERE champ_id = ? AND iteration IS NOT NULL
+                  ORDER BY start_ts DESC LIMIT 1""", (champ_id,))
+    if not cur:
+        return None
+    t, it = cur["tourney_id"], cur["iteration"]
+    span = _row("""SELECT MIN(start_ts) AS since, COUNT(*) AS matches FROM matches
+                   WHERE champ_id = ? AND tourney_id = ? AND iteration = ?""",
+                (champ_id, t, it)) or {}
+    teams = (_row("""SELECT COUNT(*) AS n FROM season_tables WHERE tourney_id = ?
+                     AND iteration = (SELECT MAX(iteration) FROM season_tables
+                                      WHERE tourney_id = ?)""", (t, t)) or {}).get("n")
+    return {"iteration": it, "tourney_id": t, "since": span.get("since"),
+            "matches": span.get("matches") or 0,
+            "season_matches": teams * (teams - 1) if teams else None}
 
 
 @router.post("/leagues")
