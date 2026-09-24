@@ -1,21 +1,4 @@
-# scripts/detect-network.sh tarafindan uretildi - 2026-09-03 guncellendi
-
-# Site adresi - TEK KAYNAK. betandyou alan adini sik degistiriyor; degisince
-# yalnizca bu satiri guncelleyin (scripts/site-degistir.ps1 de bunu yazar).
-BETODDS_SITE=https://betandyou-8229.pro
-
+# scripts/detect-network.sh tarafindan uretildi - 2026-09-24 16:14
+BETODDS_SITE=https://betandyou-1268.pro
 BETODDS_POLL=20
-
-# Sistem DNS'i alan adini engel sunucusuna cozuyor (her genel cozucu de dahil
-# 195.175.254.2 donuyor), bu yuzden adres cozumunu biz yapiyoruz. IP eskirse
-# site erisilemez hale gelir - o zaman scripts/detect-network.sh calistirin.
-BETODDS_DNS_OVERRIDE=betandyou-8229.pro=185.175.166.0
-
-# eventsstat.com (sezon tablolari) bu agda SNI tabanli DPI'a takiliyor; tum
-# trafik byedpi proxy'sine yonlendiriliyor. Proxy ayakta degilse HICBIR istek
-# gitmez - once onu baslatin (docker compose up -d proxy).
-BETODDS_PROXY=socks5://127.0.0.1:1080
-
-# Calisan DPI bypass stratejisi: -r 1+s
-# Bu dosya kabuk tarafindan source ediliyor; bosluklu degeri degisken olarak
-# YAZMAYIN. Gercek ayar kok .env icindeki CIADPI_ARGS satirinda.
+# BETODDS_PROXY=socks5://127.0.0.1:1080

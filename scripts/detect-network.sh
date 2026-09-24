@@ -16,7 +16,7 @@ PROXY_DEFAULT=socks5://127.0.0.1:1080
 # Ayna adresi TEK KAYNAK: var olan backend/env icindeki BETODDS_SITE. Burada
 # ikinci bir sabit tutmak, site degisince bu betigi sessizce eski adrese
 # bakar hale getiriyordu.
-SITE_DEFAULT=https://betandyou-8229.pro
+SITE_DEFAULT=https://betandyou-1268.pro
 SITE="$(sed -n 's/^BETODDS_SITE=//p' "$ENV_FILE" 2>/dev/null | tail -1)"
 SITE="${SITE:-$SITE_DEFAULT}"
 SITE_HOST="${SITE#*://}"; SITE_HOST="${SITE_HOST%%/*}"

@@ -81,7 +81,7 @@ Strateji tutmazsa `-o 1+s`, `-q 1+s`, `-s 1+s` deneyin
 `backend/env` icinde sabit bir IP var:
 
 ```ini
-BETODDS_DNS_OVERRIDE=betandyou-8229.pro=185.175.166.0
+BETODDS_DNS_OVERRIDE=betandyou-1268.pro=185.175.166.0
 ```
 
 VPN uzerinden DNS zaten temiz cozuluyorsa bu satira gerek yok; site IP
@@ -184,5 +184,5 @@ ekleme adimlari icin `README.md` -> "Lig ekleme".
 |---|---|
 | Eski arayuz / eski davranis goruluyor | `http://localhost:8000/api/health` -> `build` alani calisan arayuz paketini verir (or. `index-Ct07VQxx.js`). Yeni pakettekiyle (`frontend\dist\assets\`) ayni degilse eski surum calisiyordur: `docker compose down` + kurulumu tekrar calistir. Yerel yolda `runtime\`, `tools\` silip tekrar deneyin |
 | Veri guncellenmiyor | `http://127.0.0.1:8000/api/health` -> `collector.last_error`. Ayrica `/api/logs` |
-| Docker konteynerinden siteye cikilamiyor | VPN split-tunnel ise WSL2'yi kapsamaz. Test: `docker compose exec betodds curl -sS -o NUL -w "%{http_code}" https://betandyou-8229.pro/` |
+| Docker konteynerinden siteye cikilamiyor | VPN split-tunnel ise WSL2'yi kapsamaz. Test: `docker compose exec betodds curl -sS -o NUL -w "%{http_code}" https://betandyou-1268.pro/` |
 | `python.exe` acilmiyor | `runtime\python` klasorunu silip kurulumu tekrar calistir |

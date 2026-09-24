@@ -14,7 +14,7 @@ $envFile = 'backend/env'
 # Site adresi TEK YERDEN gelir: backend/env icindeki BETODDS_SITE.
 # betandyou surekli alan adi degistiriyor; degisince yalnizca orayi
 # guncellemek yeterli olsun diye host listesini oradan tureti yoruz.
-$DEFAULT_SITE = 'https://betandyou-8229.pro'
+$DEFAULT_SITE = 'https://betandyou-1268.pro'
 
 function Read-EnvFile {
     param([string]$Path)

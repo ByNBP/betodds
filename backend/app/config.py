@@ -8,7 +8,7 @@ DATA_DIR = os.environ.get("BETODDS_DATA", os.path.join(os.path.dirname(BASE_DIR)
 DB_PATH = os.path.join(DATA_DIR, "betodds.db")
 LEAGUES_PATH = os.path.join(DATA_DIR, "leagues.json")
 
-SITE = os.environ.get("BETODDS_SITE", "https://betandyou-8229.pro")
+SITE = os.environ.get("BETODDS_SITE", "https://betandyou-1268.pro")
 STATS_SITE = "https://eventsstat.com"
 USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
@@ -37,7 +37,7 @@ def _parse_dns_override(raw: str) -> dict[str, str]:
 
 
 # Sistem DNS'i alan adini ISP'nin engel sunucusuna cozuyorsa gercek IP burada
-# verilir: BETODDS_DNS_OVERRIDE="betandyou-8229.pro=185.175.165.255"
+# verilir: BETODDS_DNS_OVERRIDE="betandyou-1268.pro=185.175.165.255"
 DNS_OVERRIDE = _parse_dns_override(os.environ.get("BETODDS_DNS_OVERRIDE", ""))
 LANG = os.environ.get("BETODDS_LANG", "tr")
 COUNTRY = int(os.environ.get("BETODDS_COUNTRY", "1"))

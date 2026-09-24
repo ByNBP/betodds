@@ -83,7 +83,7 @@ Write-Host '=== Site adresi degistirme ===' -ForegroundColor Cyan
 Write-Host ''
 
 $envMap = Read-EnvFile $ENV_FILE
-$current = if ($envMap.BETODDS_SITE) { $envMap.BETODDS_SITE } else { 'https://betandyou-8229.pro' }
+$current = if ($envMap.BETODDS_SITE) { $envMap.BETODDS_SITE } else { 'https://betandyou-1268.pro' }
 Line 'mevcut adres' $current
 
 if (-not $Site) {

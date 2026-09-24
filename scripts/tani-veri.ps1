@@ -86,7 +86,7 @@ if (Test-Path 'backend/env') {
         if ($_ -match '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$') { $envMap[$Matches[1]] = $Matches[2].Trim() }
     }
 }
-$site = if ($envMap.BETODDS_SITE) { $envMap.BETODDS_SITE } else { 'https://betandyou-8229.pro' }
+$site = if ($envMap.BETODDS_SITE) { $envMap.BETODDS_SITE } else { 'https://betandyou-1268.pro' }
 $siteHost = ([Uri]$site).Host
 $api = "$site/service-api/LiveFeed/Get1x2_VZip?champs=2986291&count=50&lng=tr&mode=4&country=1&getEmpty=true&virtualSports=true&noFilterBlockEvent=true"
 
