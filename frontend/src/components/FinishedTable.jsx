@@ -22,6 +22,13 @@ import { adjustText, fmtOdd, fmtDateTime, fmtTime } from '../format.js'
  *
  * favorite=true (pano ozeti ve Sonuclar sayfasi): "En buyuk ust" yerine
  * "Favori / Surpriz" sutunu gelir ve tutan alt'in onune konur.
+ *
+ * Mac adinin yaninda oynandigi sezon yazar (her iki kullanimda da).
+ *
+ * detail=true (Sonuclar sayfasi): iki takimin ayri ayri mac oncesi gol
+ * beklentisi. Takim beklentisi toplam beklentinin kesin
+ * skor marketindeki paya gore bolunmesi (bkz. markets.goal_expectation);
+ * takim o sayinin USTUNDE gol attiysa yesil - toplam sutunuyla ayni olcut.
  */
 
 /* Baslangic orani dusuk olan taraf favori. Favori kazandiysa 'fav', oteki
@@ -37,7 +44,7 @@ function favoriteResult(m) {
 }
 
 export default function FinishedTable({ matches, showDate = false, mark = false,
-                                        favorite = false }) {
+                                        favorite = false, detail = false }) {
   /* mark=true -> tutan yesil-kalin + tik, tutmayan kirmizi + carpi.
      Sonuclar sayfasi da canli ozet de bu modda; mark=false yalnizca
      isaretsiz bir tablo isteyen bir cagiran olursa diye duruyor.
@@ -52,13 +59,28 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
     if (mark && olculebilir) return <span className="tick" title={no}>✗</span>
     return null
   }
+  // Takimin kendi beklentisi: attigi gol ustundeyse tuttu.
+  const teamExpect = (x, goals) => {
+    const ok = x != null && goals != null && goals > x
+    return (
+      <td className={`num ${cls(ok, x != null)}`}>
+        {x != null ? x.toFixed(2) : '—'}
+        {sign(ok, x != null, 'takım beklentinin üstünde gol attı', 'takım beklentinin altında kaldı')}
+      </td>
+    )
+  }
   return (
     <table>
       <thead>
         <tr>
-          <th>{showDate ? 'Tarih' : 'Saat'}</th><th>Maç</th>
+          <th>{showDate ? 'Tarih' : 'Saat'}</th>
+          <th>Maç</th>
           <th className="num">Skor</th><th className="num">Toplam</th>
           <th className="num" title="Ham beklentiden 0.5 çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">Beklenen</th>
+          {detail && <>
+            <th className="num" title="Ev sahibinin maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Ev bekl.</th>
+            <th className="num" title="Deplasmanın maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Dep. bekl.</th>
+          </>}
           <th className="num">1</th><th className="num">X</th><th className="num">2</th>
           {favorite && (
             <th className="num" title="Başlangıç oranı düşük olan takım kazandıysa Favori, diğer takım kazandıysa Sürpriz">
@@ -94,9 +116,16 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
                 : undefined}>
                 {showDate ? fmtDateTime(m.start_ts) : fmtTime(m.start_ts)}
               </td>
+
               <td>
                 <Link to={`/mac/${m.event_id}`}>{m.home}
                   <span className="muted"> – </span>{m.away}</Link>
+                {/* Macin oynandigi sezon. Toplayici maci baslamadan
+                    yakaladiysa bilinir; ilk kez canliyken gorulen maclarda yok. */}
+                {m.iteration != null && (
+                  <span className="season-tag" title={`${m.iteration}. sezonda oynandı`}>
+                    {m.iteration}. sezon</span>
+                )}
               </td>
               <td className="num"><strong>{m.score_home} - {m.score_away}</strong></td>
               <td className="num"><strong>{m.total}</strong></td>
@@ -111,6 +140,10 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
                 {sign(m.expect_hit, e?.total != null,
                       'toplam gol beklentinin üstünde', 'beklentinin altında kaldı')}
               </td>
+              {detail && <>
+                {teamExpect(e?.home, m.score_home)}
+                {teamExpect(e?.away, m.score_away)}
+              </>}
               <td className="num">{fmtOdd(m.p1)}</td>
               <td className="num">{fmtOdd(m.px)}</td>
               <td className="num">{fmtOdd(m.p2)}</td>

@@ -346,7 +346,7 @@ export default function Results({ champ, leagues, onChamp }) {
 
         {!data ? <div className="empty">Yükleniyor…</div>
           : rows.length === 0 ? <div className="empty">Bu filtreye uyan maç yok.</div>
-          : <FinishedTable matches={rows} showDate mark favorite />}
+          : <FinishedTable matches={rows} showDate mark favorite detail />}
       </div>
 
       {/* Sayfa numaralari: 50 sayfalik arsivde ileri/geri ile gezmek
@@ -389,7 +389,7 @@ export default function Results({ champ, leagues, onChamp }) {
               <span>{new Date().toLocaleString('tr-TR')}</span>
             </div>
           </div>
-          <FinishedTable matches={printRows} showDate mark favorite />
+          <FinishedTable matches={printRows} showDate mark favorite detail />
         </div>
       )}
     </>
