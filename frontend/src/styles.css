@@ -144,7 +144,6 @@ h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
    ONDAN ONCEKI deger oldugu belli olsun. */
 .adjust-note { font-size: 10px; color: var(--accent); font-weight: 500;
   font-variant-numeric: tabular-nums; }
-.expect .adjust-note { margin-left: 2px; }
 
 .odds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .odd { background: var(--panel-2); border: 1px solid var(--line);

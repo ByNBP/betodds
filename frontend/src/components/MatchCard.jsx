@@ -106,14 +106,9 @@ export default function MatchCard({ m }) {
 
       {m.expect ? (
         <div className="expect">
-          <span className="muted">istatistik gol sayısı</span>
+          <span className="muted">İst Gol Sayısı:</span>
+          {/* Ham deger alttaki satirda (Maç ist.); islem ipucunda. */}
           <strong title={adjustText(m.expect) || undefined}>{fmtGoal(m.expect.total)}</strong>
-          {/* Mavi: macin kalibrasyon oncesi ham toplam gol beklentisi. */}
-          {m.expect.total_raw != null && (
-            <span className="adjust-note" title={adjustText(m.expect) || undefined}>
-              ({m.expect.total_raw.toFixed(2)})
-            </span>
-          )}
         </div>
       ) : <div className="expect muted">maç öncesi arşiv yok</div>}
       {/* Sonuclar tablosundaki Maç ist. / Ev ist. / Dep. ist. sutunlarinin
