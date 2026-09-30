@@ -200,11 +200,9 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 /* Oran filtresi: dar sayi kutulari, etiketler kutularla ayni hizada. */
 .odds-filter { align-items: center; margin-top: -6px; }
 .odds-filter input { width: 84px; }
-/* Sonuclar: istatistik araliklari. Her grup "etiket min – max". */
+/* Sonuclar: istatistik suzgeci (oran suzgeciyle ayni duzen). */
 .stat-filter { align-items: center; margin-top: -6px; }
-.stat-filter input { width: 92px; }
-.stat-filter .stat-range { display: inline-flex; align-items: center; gap: 4px;
-  margin-right: 10px; }
+.stat-filter input { width: 100px; }
 td.raw-stat { color: var(--accent); }
 /* Tarih seridi: kutular ve hazir aralik butonlari tek hizada. */
 .date-filter { align-items: center; }

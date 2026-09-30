@@ -78,8 +78,8 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
           <th className="num">Skor</th><th className="num">Toplam</th>
           <th className="num" title="İstatistik gol sayısı: ham değerden 0.5 (11:00–18:30 arası başlayan maçlarda 1.5) çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">İst. gol</th>
           {detail && <>
-            <th className="num" title="Maçın kalibrasyon öncesi ham toplam gol beklentisi (İst. gol bundan türetiliyor)">
-              Maç istatistik</th>
+            <th className="num" title="Maç istatistik: kalibrasyon öncesi ham toplam gol beklentisi (İst. gol bundan türetiliyor)">
+              Maç ist.</th>
             <th className="num" title="Ev sahibinin istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Ev ist.</th>
             <th className="num" title="Deplasmanın istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Dep. ist.</th>
           </>}

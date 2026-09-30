@@ -12,18 +12,17 @@ const PAGE = 100
 // Disa aktarmada sunucudan tek seferde alinabilecek en buyuk sayfa (api le=200).
 const EXPORT_PAGE = 200
 const EMPTY_ODDS = { o1: '', ox: '', o2: '' }
-// Istatistik araliklari (min/max, iki ucu dahil). Anahtar sunucudaki
-// parametre onekidir: raw_min, raw_max, home_min ...
+// Istatistik suzgeci: her biri tek deger, ortak +/- tolerans (oran suzgeci
+// gibi). Anahtar sunucudaki parametre adidir.
 const STATS = [
-  { key: 'raw', label: 'Maç istatistik', short: 'Maç ist.',
-    title: 'Maçın ham toplam gol beklentisi (tablodaki Maç istatistik sütunu)' },
-  { key: 'home', label: 'Ev istatistik', short: 'Ev ist.',
+  { key: 'raw', label: 'Maç ist.', short: 'Maç ist.',
+    title: 'Maçın ham toplam gol beklentisi (tablodaki Maç ist. sütunu)' },
+  { key: 'home', label: 'Ev ist.', short: 'Ev ist.',
     title: 'Ev sahibinin istatistik gol sayısı (tablodaki Ev ist. sütunu)' },
-  { key: 'away', label: 'Deplasman istatistik', short: 'Dep. ist.',
+  { key: 'away', label: 'Dep. ist.', short: 'Dep. ist.',
     title: 'Deplasmanın istatistik gol sayısı (tablodaki Dep. ist. sütunu)' },
 ]
-const EMPTY_STATS = Object.fromEntries(
-  STATS.flatMap((f) => [[`${f.key}_min`, ''], [`${f.key}_max`, '']]))
+const EMPTY_STATS = Object.fromEntries(STATS.map((f) => [f.key, '']))
 
 /**
  * Sonuclar: biten maclar, panonun tepesindeki ozetle ayni bicimde.
@@ -76,6 +75,7 @@ export default function Results({ champ, leagues, onChamp }) {
   const [ready, setReady] = useState(false)
   const [odds, setOdds] = useState(EMPTY_ODDS)
   const [stats, setStats] = useState(EMPTY_STATS)
+  const [statGap, setStatGap] = useState('0.25')
   const [gap, setGap] = useState('0.25')
   const [teams, setTeams] = useState([])
   const [error, setError] = useState(null)
@@ -89,6 +89,9 @@ export default function Results({ champ, leagues, onChamp }) {
   const oddsOn = Boolean(odds.o1 || odds.ox || odds.o2)
   // Kutu bosaltilirsa ya da 0 girilirse sunucu 422 dondurur; varsayilana duseriz.
   const gapNum = Number(gap) > 0 ? gap : '0.25'
+  const statsOn = STATS.some((f) => stats[f.key] !== '')
+  // Istatistik toleransi 0 olabilir (birebir); bos/negatifse varsayilan.
+  const statGapNum = statGap !== '' && Number(statGap) >= 0 ? statGap : '0.25'
 
   // Tek sorgu nesnesi: hem listeyi hem PDF'i besler, ikisi ayrisamaz.
   const query = useMemo(() => ({
@@ -98,8 +101,9 @@ export default function Results({ champ, leagues, onChamp }) {
     o1: odds.o1, ox: odds.ox, o2: odds.o2,
     gap: oddsOn ? gapNum : '',
     ...stats,
+    stat_gap: statsOn ? statGapNum : '',
   }), [champ, hit, team, side, opp, dateFrom, dateTo,
-       odds.o1, odds.ox, odds.o2, gapNum, oddsOn, stats])
+       odds.o1, odds.ox, odds.o2, gapNum, oddsOn, stats, statGapNum, statsOn])
 
   // Filtre degisince listenin basina don - eski sayfa numarasi yeni kumede
   // bambaska bir yere denk gelirdi.
@@ -189,7 +193,7 @@ export default function Results({ champ, leagues, onChamp }) {
 
   const clearAll = () => {
     setTeam(''); setSide(''); setOpp(''); setOdds(EMPTY_ODDS); setGap('0.25')
-    setStats(EMPTY_STATS)
+    setStats(EMPTY_STATS); setStatGap('0.25')
     setDateFrom(''); setDateTo('')
   }
 
@@ -228,11 +232,7 @@ export default function Results({ champ, leagues, onChamp }) {
     if (odds[k]) active.push(`${lbl} = ${odds[k]} ±${gapNum}`)
   }
   for (const f of STATS) {
-    const lo = stats[`${f.key}_min`]
-    const hi = stats[`${f.key}_max`]
-    if (lo && hi) active.push(`${f.short} ${lo}–${hi}`)
-    else if (lo) active.push(`${f.short} ≥ ${lo}`)
-    else if (hi) active.push(`${f.short} ≤ ${hi}`)
+    if (stats[f.key]) active.push(`${f.short} = ${stats[f.key]} ±${statGapNum}`)
   }
   const anyFilter = active.length > 0
 
@@ -312,22 +312,25 @@ export default function Results({ champ, leagues, onChamp }) {
         )}
       </div>
 
-      {/* Istatistik araliklari: tablodaki Maç istatistik / Ev ist. / Dep. ist.
-          sutunlari. Bir uc bos birakilabilir; aralik girilince istatistigi
-          olmayan maclar elenir. */}
+      {/* Istatistik suzgeci: tablodaki Maç ist. / Ev ist. / Dep. ist.
+          sutunlari. Her biri tek deger, ortak ± tolerans; deger girilince
+          istatistigi olmayan maclar elenir. */}
       <div className="controls stat-filter">
+        <span className="muted">İstatistik:</span>
         {STATS.map((f) => (
-          <span key={f.key} className="stat-range" title={f.title}>
-            <span className="muted">{f.label}:</span>
-            <input type="number" step="0.1" min="0" placeholder="en az"
-              value={stats[`${f.key}_min`]} onChange={setStat(`${f.key}_min`)}
-              aria-label={`${f.label} en az`} />
-            <span className="muted">–</span>
-            <input type="number" step="0.1" min="0" placeholder="en çok"
-              value={stats[`${f.key}_max`]} onChange={setStat(`${f.key}_max`)}
-              aria-label={`${f.label} en çok`} />
-          </span>
+          <input key={f.key} type="number" step="0.01" min="0" placeholder={f.label}
+            value={stats[f.key]} onChange={setStat(f.key)} title={f.title}
+            aria-label={f.label} />
         ))}
+        <span className="muted">± </span>
+        <input type="number" step="0.05" min="0" value={statGap}
+          onChange={(e) => setStatGap(e.target.value)}
+          title="Tolerans (0 = birebir)" aria-label="İstatistik toleransı" />
+        {statsOn && (
+          <span className="muted" style={{ alignSelf: 'center' }}>
+            girilen her değer için ±{statGapNum}
+          </span>
+        )}
       </div>
 
       {/* Tuttu = toplam gol maç öncesi beklentiyi aştı. Beklentisi olmayan
