@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { adjustText, fmtGoal, fmtOdd, fmtTime, isFavoriteMatch, scoreText, startText,
-  STATUS_LABEL } from '../format.js'
+import { adjustText, fmtGoal, fmtOdd, fmtTime, isFavoriteMatch, isHighGoal, scoreText,
+  startText, STATUS_LABEL } from '../format.js'
 
 // Renkli nokta = seri kimligi; sayi metin renginde kalir.
 const ODDS = [
@@ -75,6 +75,11 @@ export default function MatchCard({ m }) {
             <span className="badge fav fav-match"
                   title="Favori oranı 1.80–1.95 arası · iki takımın istatistik gol farkı 0.50 altı · ham değer ≥ 7.50">
               favori maç</span>
+          )}
+          {isHighGoal(m) && (
+            <span className="badge surprise high-goal"
+                  title="3x3 ligi · ev sahibi oranı 2.18">
+              yüksek gol</span>
           )}
         </div>
       </div>

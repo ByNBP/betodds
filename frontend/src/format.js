@@ -106,3 +106,16 @@ export function isFavoriteMatch(m) {
     && Math.abs(e.home - e.away) < FAV_MATCH.maxGoalGap
     && e.total_raw >= FAV_MATCH.minRaw
 }
+
+/**
+ * "Yüksek gol" uyarisi: YALNIZCA 3x3 liglerinde, ev sahibinin mac oncesi
+ * orani 2.18 ise. Oran ekranda yazildigi gibi (2 hane) karsilastirilir:
+ * 2.175-2.184 araligi 2.18 sayilir. Mac oncesi oran yoksa o anki 1 orani.
+ */
+export const HIGH_GOAL = { league: '3x3', homeOdd: 2.18 }
+
+export function isHighGoal(m) {
+  const o1 = m.p1 ?? m.o1
+  if (o1 == null || !(m.league_name || '').includes(HIGH_GOAL.league)) return false
+  return Math.round(o1 * 100) === Math.round(HIGH_GOAL.homeOdd * 100)
+}
