@@ -1521,7 +1521,7 @@ def match_h2h(event_id: int):
         raise HTTPException(404, "mac bulunamadi")
     t = m["tourney_id"] or _league_tourneys().get(m["champ_id"])
     return _h2h(m, _season_positions(t), tourney=t,
-                lines=_totals_by_event([event_id]).get(event_id))
+                pool=_prediction_pool(m["champ_id"], seasons=0))
 
 
 def _prediction_pool(champ_id: int | None = None,
