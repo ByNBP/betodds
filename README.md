@@ -245,10 +245,10 @@ gerekmez (`docker`/`podman` yeterli).
 
 Kaynak site iki katmanlı bir filtreye takılıyor:
 
-1. **DNS zehirlenmesi** — `betandyou-1268.pro` sistem DNS'inde ISP'nin engel
+1. **DNS zehirlenmesi** — `betandyou-2688.pro` sistem DNS'inde ISP'nin engel
    sunucusuna (`195.175.254.2`) çözülüyor; o adres `CN=localhost.localdomain`
    imzalı sahte bir sertifika sunuyor. Gerçek IP DoH ile alındı:
-   `185.175.166.0` (Cloudflare ve Google aynı yanıtı veriyor).
+   `185.175.166.86` (Cloudflare ve Google aynı yanıtı veriyor).
 2. **SNI tabanlı DPI** — doğru IP'ye bağlanılsa bile TLS el sıkışması
    resetleniyor (`errno 104`).
 
@@ -265,7 +265,7 @@ stratejilerden `-o 1+s`, `-q 1+s` ve `-r 1+s` çalıştı; `-s`, `-d`, `-f`
 
 ```
 BETODDS_PROXY=socks5://127.0.0.1:1080
-BETODDS_DNS_OVERRIDE=betandyou-1268.pro=185.175.166.0,eventsstat.com=83.147.204.194
+BETODDS_DNS_OVERRIDE=betandyou-2688.pro=185.175.166.86,eventsstat.com=83.147.204.194
 ```
 
 DNS override neden gerekli: httpx'in socks5 desteği adres çözümünü proxy'ye
@@ -286,7 +286,7 @@ bırakır — sertifika doğrulaması da bozulmaz.
 **champ_id** lig sayfasının URL'sindeki sayıdır:
 
 ```
-https://betandyou-1268.pro/tr/esports/virtual/fifa/2860561-fc-25-3x3-conference-league
+https://betandyou-2688.pro/tr/esports/virtual/fifa/2860561-fc-25-3x3-conference-league
                                                  ^^^^^^^
 ```
 
@@ -294,7 +294,7 @@ https://betandyou-1268.pro/tr/esports/virtual/fifa/2860561-fc-25-3x3-conference-
 değerler feed'de `GetGameZip` yanıtındaki `S` meta alanında da geliyor:
 
 ```
-https://betandyou-1268.pro/tr/statisticpopup/cyber/fifa/129/219
+https://betandyou-2688.pro/tr/statisticpopup/cyber/fifa/129/219
                                                         ^^^ ^^^
                                                   tourney  iteration
 ```
