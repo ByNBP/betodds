@@ -13,10 +13,6 @@ import { adjustText, fmtDateTime, fmtGoal, fmtOdd } from '../format.js'
  *
  * Oranlar her zaman mac ONCESI referans setinden; canli oran mac ici hareketi
  * tasidigi icin gecmisle kiyaslanamaz.
- *
- * Tutan cizgilerden ikisi gosteriliyor:
- *   Son alt = skoru gecen en dusuk alt (skora en yakin alt)
- *   Ilk ust = kitabin actigi en dusuk ust (tutan ustlerin tabani)
  */
 // Lig sirasi kartlardakiyle AYNI bicimde (.team-pos): ayni bilgi iki yerde
 // iki turlu gorunmesin. Ustsimge (<sup>) birakildi - kucuk, sonuk ve satir
@@ -38,7 +34,6 @@ function Table({ rows }) {
         <tr>
           <th>Tarih</th><th>Maç</th><th className="num">Skor</th>
           <th className="num">1</th><th className="num">X</th><th className="num">2</th>
-          <th className="num">Son alt</th><th className="num">İlk üst</th>
         </tr>
       </thead>
       <tbody>
@@ -58,14 +53,6 @@ function Table({ rows }) {
             <td className={`num ${r.hit_1 ? 'hit' : ''}`}>{fmtOdd(r.p1)}</td>
             <td className="num">{fmtOdd(r.px)}</td>
             <td className={`num ${r.hit_2 ? 'hit' : ''}`}>{fmtOdd(r.p2)}</td>
-            <td className="num">
-              {r.under_first ? <>Alt {r.under_first}
-                <span className="muted"> @{fmtOdd(r.under_first_odd)}</span></> : '—'}
-            </td>
-            <td className="num">
-              {r.over_first ? <>Üst {r.over_first}
-                <span className="muted"> @{fmtOdd(r.over_first_odd)}</span></> : '—'}
-            </td>
           </tr>
         ))}
       </tbody>
@@ -226,8 +213,7 @@ export default function MatchHistory({ h2h, home, away, expect }) {
       <OddsGoals og={oddsGoal} home={home} away={away} />
 
       <div className="h2h-note muted">
-        Oranlar maç öncesi referans setinden. <strong>Son alt</strong> skoru geçen
-        en düşük alt, <strong>ilk üst</strong> kitabın açtığı en düşük üst.{' '}
+        Oranlar maç öncesi referans setinden.{' '}
         <strong>Oran golü</strong>: bu maçın fiyatıyla — ev/deplasman
         konumları korunarak, 1 ve 2 ayakları ±{oddsGoal?.gap ?? 0.02} içinde —
         oynanmış <em>önceki</em> maçların gol ortalaması. Sonradan oynanmış
