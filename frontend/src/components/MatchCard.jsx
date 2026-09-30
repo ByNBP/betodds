@@ -92,17 +92,11 @@ export default function MatchCard({ m }) {
       {m.expect ? (
         <div className="expect">
           <span className="muted">beklenen gol</span>
-          <strong>{m.expect.total.toFixed(2)}</strong>
+          {/* Kalibrasyon islemi (ham − offset) yalnizca ipucunda. */}
+          <strong title={adjustText(m.expect) || undefined}>{m.expect.total.toFixed(2)}</strong>
           {m.expect.home !== null && (
             <span className="muted">
               {m.expect.home.toFixed(2)} – {m.expect.away.toFixed(2)}
-            </span>
-          )}
-          {/* Kalibrasyon islemi acikca yaziliyor: gosterilen sayi ham
-              market beklentisi DEGIL, ondan turetilmis bir deger. */}
-          {m.expect.total_raw != null && (
-            <span className="adjust-note" title={adjustText(m.expect)}>
-              ({m.expect.total_raw.toFixed(2)} − {m.expect.adjust?.offset ?? 0.5})
             </span>
           )}
         </div>
