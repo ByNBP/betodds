@@ -1042,6 +1042,9 @@ def results(champ_id: int | None = None, hit: str | None = None,
             date_from: str | None = None, date_to: str | None = None,
             o1: float | None = None, ox: float | None = None,
             o2: float | None = None, gap: float = Query(0.25, gt=0),
+            raw_min: float | None = None, raw_max: float | None = None,
+            home_min: float | None = None, home_max: float | None = None,
+            away_min: float | None = None, away_max: float | None = None,
             limit: int = Query(50, ge=1, le=200), offset: int = 0):
     """Sonuclar sayfasi: biten maclar, panodaki ozetle ayni bicimde.
 
@@ -1052,6 +1055,9 @@ def results(champ_id: int | None = None, hit: str | None = None,
       date_from/   maçin oynandigi gun araligi (YYYY-AA-GG), iki ucu da dahil
       date_to
       o1/ox/o2     mac oncesi 1X2 orani, her biri icin +/- gap
+      raw_*        mac istatistik (kalibrasyon oncesi ham toplam), iki ucu dahil
+      home_*/      ev / deplasman istatistik gol sayisi (tabloda Ev ist. /
+      away_*       Dep. ist.), iki ucu dahil. Bir uc bos birakilabilir.
       hit          'yes' -> toplam gol beklentiyi asanlar
                    'no'  -> beklentisi OLAN ama asmayanlar
                    yok   -> hepsi
@@ -1068,6 +1074,22 @@ def results(champ_id: int | None = None, hit: str | None = None,
     """
     rows = _finished_rows(champ_id, team, side, opp, o1, ox, o2, gap,
                           date_from=date_from, date_to=date_to)
+    # Istatistik araliklari: deger mac oncesi snapshot'tan hesaplaniyor, SQL'de
+    # yok - hit gibi Python'da suzuluyor. Istatistigi olmayan mac, aralik
+    # girildiyse elenir. counts/rates bu suzmeden SONRA: secimi anlatmali.
+    ranges = [(k, lo, hi) for k, lo, hi in (("total_raw", raw_min, raw_max),
+                                            ("home", home_min, home_max),
+                                            ("away", away_min, away_max))
+              if lo is not None or hi is not None]
+    if ranges:
+        def inside(r):
+            e = r.get("expect") or {}
+            for k, lo, hi in ranges:
+                v = e.get(k)
+                if v is None or (lo is not None and v < lo) or (hi is not None and v > hi):
+                    return False
+            return True
+        rows = [r for r in rows if inside(r)]
 
     scored = [r for r in rows if (r.get("expect") or {}).get("total") is not None]
     counts = {
@@ -1095,7 +1117,10 @@ def results(champ_id: int | None = None, hit: str | None = None,
         "favorite": favorite,
         "filters": {"team": team or "", "side": side or "", "opp": opp or "",
                     "date_from": date_from or "", "date_to": date_to or "",
-                    "o1": o1, "ox": ox, "o2": o2, "gap": gap},
+                    "o1": o1, "ox": ox, "o2": o2, "gap": gap,
+                    "raw_min": raw_min, "raw_max": raw_max,
+                    "home_min": home_min, "home_max": home_max,
+                    "away_min": away_min, "away_max": away_max},
         "date_range": _finished_span(champ_id),
         "avg_goals": round(goals / total, 2) if total else None,
         "matches": page,

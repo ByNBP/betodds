@@ -78,6 +78,8 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
           <th className="num">Skor</th><th className="num">Toplam</th>
           <th className="num" title="İstatistik gol sayısı: ham değerden 0.5 (11:00–18:30 arası başlayan maçlarda 1.5) çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">İst. gol</th>
           {detail && <>
+            <th className="num" title="Maçın kalibrasyon öncesi ham toplam gol beklentisi (İst. gol bundan türetiliyor)">
+              Maç istatistik</th>
             <th className="num" title="Ev sahibinin istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Ev ist.</th>
             <th className="num" title="Deplasmanın istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Dep. ist.</th>
           </>}
@@ -129,18 +131,21 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
               </td>
               <td className="num"><strong>{m.score_home} - {m.score_away}</strong></td>
               <td className="num"><strong>{m.total}</strong></td>
-              {/* Parantez icindeki MAVI sayi kalibrasyon oncesi ham beklenti:
-                  gosterilen deger ondan turetiliyor (ham − 0,5 ya da 11:00-18:30 arasi − 1,5 → altindaki x.5). */}
+              {/* MAVI sayi kalibrasyon oncesi ham beklenti: gosterilen deger
+                  ondan turetiliyor (ham − 0,5 ya da 11:00-18:30 arasi − 1,5 →
+                  altindaki x.5). Sonuclar sayfasinda (detail) kendi sutununda. */}
               <td className={`num ${cls(m.expect_hit, e?.total != null)}`}
                   title={adjustText(e) || undefined}>
                 {fmtGoal(e?.total)}
-                {e?.total_raw != null && (
+                {!detail && e?.total_raw != null && (
                   <span className="adjust-note"> ({e.total_raw.toFixed(2)})</span>
                 )}
                 {sign(m.expect_hit, e?.total != null,
                       'toplam gol istatistik gol sayısının üstünde', 'istatistik gol sayısının altında kaldı')}
               </td>
               {detail && <>
+                <td className="num raw-stat">
+                  {e?.total_raw != null ? e.total_raw.toFixed(2) : '—'}</td>
                 {teamExpect(e?.home, m.score_home)}
                 {teamExpect(e?.away, m.score_away)}
               </>}

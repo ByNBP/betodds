@@ -12,6 +12,18 @@ const PAGE = 100
 // Disa aktarmada sunucudan tek seferde alinabilecek en buyuk sayfa (api le=200).
 const EXPORT_PAGE = 200
 const EMPTY_ODDS = { o1: '', ox: '', o2: '' }
+// Istatistik araliklari (min/max, iki ucu dahil). Anahtar sunucudaki
+// parametre onekidir: raw_min, raw_max, home_min ...
+const STATS = [
+  { key: 'raw', label: 'Maç istatistik', short: 'Maç ist.',
+    title: 'Maçın ham toplam gol beklentisi (tablodaki Maç istatistik sütunu)' },
+  { key: 'home', label: 'Ev istatistik', short: 'Ev ist.',
+    title: 'Ev sahibinin istatistik gol sayısı (tablodaki Ev ist. sütunu)' },
+  { key: 'away', label: 'Deplasman istatistik', short: 'Dep. ist.',
+    title: 'Deplasmanın istatistik gol sayısı (tablodaki Dep. ist. sütunu)' },
+]
+const EMPTY_STATS = Object.fromEntries(
+  STATS.flatMap((f) => [[`${f.key}_min`, ''], [`${f.key}_max`, '']]))
 
 /**
  * Sonuclar: biten maclar, panonun tepesindeki ozetle ayni bicimde.
@@ -63,6 +75,7 @@ export default function Results({ champ, leagues, onChamp }) {
   // kez bosuna yuklenirdi.
   const [ready, setReady] = useState(false)
   const [odds, setOdds] = useState(EMPTY_ODDS)
+  const [stats, setStats] = useState(EMPTY_STATS)
   const [gap, setGap] = useState('0.25')
   const [teams, setTeams] = useState([])
   const [error, setError] = useState(null)
@@ -84,8 +97,9 @@ export default function Results({ champ, leagues, onChamp }) {
     date_from: dateFrom, date_to: dateTo,
     o1: odds.o1, ox: odds.ox, o2: odds.o2,
     gap: oddsOn ? gapNum : '',
+    ...stats,
   }), [champ, hit, team, side, opp, dateFrom, dateTo,
-       odds.o1, odds.ox, odds.o2, gapNum, oddsOn])
+       odds.o1, odds.ox, odds.o2, gapNum, oddsOn, stats])
 
   // Filtre degisince listenin basina don - eski sayfa numarasi yeni kumede
   // bambaska bir yere denk gelirdi.
@@ -175,6 +189,7 @@ export default function Results({ champ, leagues, onChamp }) {
 
   const clearAll = () => {
     setTeam(''); setSide(''); setOpp(''); setOdds(EMPTY_ODDS); setGap('0.25')
+    setStats(EMPTY_STATS)
     setDateFrom(''); setDateTo('')
   }
 
@@ -189,6 +204,7 @@ export default function Results({ champ, leagues, onChamp }) {
     : Boolean(span?.last) && dateTo === span.last
       && dateFrom === dayBefore(span.last, days - 1))
   const setOdd = (k) => (e) => setOdds((o) => ({ ...o, [k]: e.target.value }))
+  const setStat = (k) => (e) => setStats((o) => ({ ...o, [k]: e.target.value }))
 
   // Etkin filtrelerin okunabilir listesi - hem ekranda hem PDF basliginda
   // ayni metin: ciktiya bakan biri hangi secimi gordugunu bilmeli.
@@ -210,6 +226,13 @@ export default function Results({ champ, leagues, onChamp }) {
   }
   for (const [k, lbl] of [['o1', '1'], ['ox', 'X'], ['o2', '2']]) {
     if (odds[k]) active.push(`${lbl} = ${odds[k]} ±${gapNum}`)
+  }
+  for (const f of STATS) {
+    const lo = stats[`${f.key}_min`]
+    const hi = stats[`${f.key}_max`]
+    if (lo && hi) active.push(`${f.short} ${lo}–${hi}`)
+    else if (lo) active.push(`${f.short} ≥ ${lo}`)
+    else if (hi) active.push(`${f.short} ≤ ${hi}`)
   }
   const anyFilter = active.length > 0
 
@@ -287,6 +310,24 @@ export default function Results({ champ, leagues, onChamp }) {
             girilen her oran için ±{gapNum}
           </span>
         )}
+      </div>
+
+      {/* Istatistik araliklari: tablodaki Maç istatistik / Ev ist. / Dep. ist.
+          sutunlari. Bir uc bos birakilabilir; aralik girilince istatistigi
+          olmayan maclar elenir. */}
+      <div className="controls stat-filter">
+        {STATS.map((f) => (
+          <span key={f.key} className="stat-range" title={f.title}>
+            <span className="muted">{f.label}:</span>
+            <input type="number" step="0.1" min="0" placeholder="en az"
+              value={stats[`${f.key}_min`]} onChange={setStat(`${f.key}_min`)}
+              aria-label={`${f.label} en az`} />
+            <span className="muted">–</span>
+            <input type="number" step="0.1" min="0" placeholder="en çok"
+              value={stats[`${f.key}_max`]} onChange={setStat(`${f.key}_max`)}
+              aria-label={`${f.label} en çok`} />
+          </span>
+        ))}
       </div>
 
       {/* Tuttu = toplam gol maç öncesi beklentiyi aştı. Beklentisi olmayan
