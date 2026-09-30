@@ -73,7 +73,7 @@ export default function MatchCard({ m }) {
           <WinPick m={m} />
           {isFavoriteMatch(m) && (
             <span className="badge fav fav-match"
-                  title="Favori oranı 1.80 üstü · iki takımın istatistik gol farkı 0.50 altı · ham değer ≥ 7.50">
+                  title="Favori oranı 1.80–1.95 arası · iki takımın istatistik gol farkı 0.50 altı · ham değer ≥ 7.50">
               favori maç</span>
           )}
         </div>

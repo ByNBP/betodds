@@ -85,14 +85,15 @@ export const fmtGoal = (v) => (v == null ? '—' : String(Math.round(v)))
 
 /**
  * "Favori maç" etiketi - uc kosulun HEPSI:
- *   1. Favori orani (mac oncesi 1 ve 2'den dusugu) 1.80'in USTUNDE,
+ *   1. Favori orani (mac oncesi 1 ve 2'den dusugu) 1.80'in USTUNDE ve
+ *      1.95'in ALTINDA (iki sinir da haric),
  *   2. iki takimin beklenen golu (kartta yazan, kalibre) arasindaki fark
  *      0.50'nin ALTINDA,
  *   3. ham beklenti (kalibrasyon oncesi, "parantez ici") >= 7.50.
  * Mac oncesi oran yoksa (p1/p2) o anki 1X2'ye bakilir - baslamamis macta
  * ikisi ayni sey. Veri eksikse etiket yok.
  */
-export const FAV_MATCH = { minFavOdd: 1.80, maxGoalGap: 0.50, minRaw: 7.50 }
+export const FAV_MATCH = { minFavOdd: 1.80, maxFavOdd: 1.95, maxGoalGap: 0.50, minRaw: 7.50 }
 
 export function isFavoriteMatch(m) {
   const e = m.expect
@@ -100,7 +101,8 @@ export function isFavoriteMatch(m) {
   const o2 = m.p2 ?? m.o2
   if (!e || o1 == null || o2 == null || e.home == null || e.away == null
       || e.total_raw == null) return false
-  return Math.min(o1, o2) > FAV_MATCH.minFavOdd
+  const fav = Math.min(o1, o2)
+  return fav > FAV_MATCH.minFavOdd && fav < FAV_MATCH.maxFavOdd
     && Math.abs(e.home - e.away) < FAV_MATCH.maxGoalGap
     && e.total_raw >= FAV_MATCH.minRaw
 }
