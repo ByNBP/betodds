@@ -134,11 +134,6 @@ ODDS_GOAL_LIMIT = int(os.environ.get("BETODDS_ODDS_GOAL_LIMIT", "20"))
 # Bunlardan ekranda ornek olarak listelenecek mac sayisi.
 ODDS_GOAL_SAMPLES = int(os.environ.get("BETODDS_ODDS_GOAL_SAMPLES", "5"))
 
-# Karsilasma gecmisi kutusunda gosterilecek sezon sayisi (eventsstat capraz
-# sonuc tablosundan). Bizim arsivimiz yalnizca birkac gunu kapsiyor; gecmis
-# sezonlar tek kaynak.
-H2H_SEASONS = int(os.environ.get("BETODDS_H2H_SEASONS", "4"))
-
 # Sayfanin tepesinde ozetlenen son biten mac sayisi.
 RECENT_FINISHED_LIMIT = int(os.environ.get("BETODDS_RECENT_FINISHED", "5"))
 

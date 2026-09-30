@@ -17,7 +17,7 @@ from .config import (LIVE_MATCH_MINUTES, League, POLL_SECONDS,
                      SIMILAR_GAP, SIMILAR_SAMPLE_LIMIT,
                      PREDICT_WEIGHTS, SAME_ODDS_GAP,
                      SAME_ODDS_MIN_LEGS,
-                     SAME_ODDS_LIMIT, H2H_SEASONS,
+                     SAME_ODDS_LIMIT,
                      ODDS_GOAL_GAP, ODDS_GOAL_LIMIT, ODDS_GOAL_SAMPLES,
                      RECENT_FINISHED_LIMIT,
                      load_leagues, save_leagues)
@@ -1380,44 +1380,6 @@ def _same_odds(match: dict, exclude: set[int], by_iter: dict,
     return out
 
 
-def _season_h2h(tourney_id: int | None, home: str, away: str,
-                seasons: int = H2H_SEASONS) -> dict:
-    """Son N sezonda ayni iki takimin oynadigi maclar (eventsstat).
-
-    Bizim arsivimiz yalnizca birkac gunu kapsiyor, dolayisiyla gecmis
-    sezonlardaki eslesmeler icin tek kaynak sitenin sezon ozeti. Oran YOK -
-    o kayitlar sadece skor tasiyor.
-    """
-    if tourney_id is None or not home or not away:
-        return {"n": 0, "seasons": [], "matches": []}
-    its = [r["iteration"] for r in _rows(
-        "SELECT DISTINCT iteration FROM season_matches WHERE tourney_id = ? "
-        "ORDER BY iteration DESC LIMIT ?", (tourney_id, seasons))]
-    if not its:
-        return {"n": 0, "seasons": [], "matches": []}
-    marks = ",".join("?" * len(its))
-    rows = _rows(
-        f"""SELECT iteration, home, away, score_home, score_away
-            FROM season_matches
-            WHERE tourney_id = ? AND iteration IN ({marks})
-                  AND ((home = ? AND away = ?) OR (home = ? AND away = ?))
-            ORDER BY iteration DESC, home""",
-        (tourney_id, *its, home, away, away, home))
-    for r in rows:
-        r["total"] = r["score_home"] + r["score_away"]
-        # Ekranda su anki ev sahibinin golu hep ayni sutunda dursun.
-        swapped = r["home"] != home
-        r["for_home"] = r["score_away"] if swapped else r["score_home"]
-        r["for_away"] = r["score_home"] if swapped else r["score_away"]
-    out = {"n": len(rows), "seasons": its, "matches": rows}
-    if rows:
-        n = len(rows)
-        out["avg_total"] = round(sum(r["total"] for r in rows) / n, 2)
-        out["avg_home"] = round(sum(r["for_home"] for r in rows) / n, 2)
-        out["avg_away"] = round(sum(r["for_away"] for r in rows) / n, 2)
-    return out
-
-
 def _odds_goal(match: dict, pool: list[dict], gap: float = ODDS_GOAL_GAP,
                limit: int = ODDS_GOAL_LIMIT,
                samples: int = ODDS_GOAL_SAMPLES) -> dict:
@@ -1525,8 +1487,6 @@ def _h2h(match: dict, positions: tuple[dict, int | None] | None = None,
     out = _summary(rows)
     out["same_odds"] = _same_odds(match, {r["event_id"] for r in rows},
                                   by_iter, latest)
-    seasons = _season_h2h(tourney, home, away)
-    out["seasons"] = seasons
 
     # Oran golu: ayni fiyata, ayni dizilisle oynanmis son maclar.
     out["odds_goal"] = _odds_goal(match, pool or [])

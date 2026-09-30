@@ -84,34 +84,6 @@ function Summary({ block, home, away }) {
   )
 }
 
-/** Sezon capraz tablosundan gelen maclar: oran yok, yalnizca skor. */
-function SeasonTable({ rows, home }) {
-  return (
-    <table>
-      <thead>
-        <tr>
-          <th className="num">Sezon</th><th>Maç</th>
-          <th className="num">Skor</th><th className="num">Toplam</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={`${r.iteration}-${r.home}-${i}`}>
-            <td className="num muted">{r.iteration}</td>
-            <td>
-              <span className={r.home === home ? 'ours' : ''}>{r.home}</span>
-              <span className="muted"> – </span>
-              <span className={r.away === home ? 'ours' : ''}>{r.away}</span>
-            </td>
-            <td className="num"><strong>{r.score_home} - {r.score_away}</strong></td>
-            <td className="num">{r.total}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
 /**
  * Oran golu: bu macin FIYATIYLA oynanmis onceki maclarda kac gol olmus.
  *
@@ -186,8 +158,6 @@ export default function MatchHistory({ h2h, home, away, expect }) {
   const past = h2h?.matches || []
   const same = h2h?.same_odds
   const sameRows = same?.matches || []
-  const seas = h2h?.seasons
-  const seasRows = seas?.matches || []
   const oddsGoal = h2h?.odds_goal
 
   const anyCurrent = [...past, ...sameRows]
@@ -255,30 +225,9 @@ export default function MatchHistory({ h2h, home, away, expect }) {
       </h3>
       <OddsGoals og={oddsGoal} home={home} away={away} />
 
-      <h3 style={{ marginTop: 18 }}>
-        Son {seas?.seasons?.length || 0} sezon{seasRows.length ? ` (${seas.n})` : ''}
-        {seas?.seasons?.length
-          ? <span className="muted"> · sezon {seas.seasons[seas.seasons.length - 1]}–{seas.seasons[0]}</span>
-          : null}
-      </h3>
-      {seasRows.length ? (
-        <>
-          <Summary block={seas} home={home} away={away} />
-          <SeasonTable rows={seasRows} home={home} />
-        </>
-      ) : (
-        <div className="empty" style={{ padding: '10px 8px' }}>
-          {seas?.seasons?.length
-            ? 'Bu iki takım son sezonlarda karşılaşmamış.'
-            : 'Sezon maçları henüz çekilmedi.'}
-        </div>
-      )}
-
       <div className="h2h-note muted">
         Oranlar maç öncesi referans setinden. <strong>Son alt</strong> skoru geçen
         en düşük alt, <strong>ilk üst</strong> kitabın açtığı en düşük üst.{' '}
-        <strong>Son sezonlar</strong> sitenin sezon özetinden gelir (çapraz sonuç
-        tablosu); orada oran yok, yalnızca skor.{' '}
         <strong>Oran golü</strong>: bu maçın fiyatıyla — ev/deplasman
         konumları korunarak, 1 ve 2 ayakları ±{oddsGoal?.gap ?? 0.02} içinde —
         oynanmış <em>önceki</em> maçların gol ortalaması. Sonradan oynanmış
