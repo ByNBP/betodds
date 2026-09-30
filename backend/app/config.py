@@ -71,6 +71,12 @@ LIVE_MATCH_MINUTES = float(os.environ.get("BETODDS_MATCH_MINUTES", "11"))
 # ham degerlerle calisir, aksi halde hem bilesene hem harmana uygulanip
 # duzeltme iki kez inerdi.
 EXPECT_OFFSET = float(os.environ.get("BETODDS_EXPECT_OFFSET", "0.5"))
+# Gunduz penceresi: baslama saati (yerel saat, TZ) bu aralikta olan maclarda
+# EXPECT_OFFSET yerine EXPECT_OFFSET_PEAK dusulur. Baslangic dahil, bitis
+# haric: 11:00 - 18:30 -> 11:00'deki mac 1.5, 18:30'daki 0.5.
+# Baslama saati bilinmiyorsa (ornek: harman disi bir ortalama) EXPECT_OFFSET.
+EXPECT_OFFSET_PEAK = float(os.environ.get("BETODDS_EXPECT_OFFSET_PEAK", "1.5"))
+EXPECT_PEAK_HOURS = os.environ.get("BETODDS_EXPECT_PEAK_HOURS", "11:00-18:30")
 EXPECT_STEP = float(os.environ.get("BETODDS_EXPECT_STEP", "1.0"))
 
 # ----------------------------------------------------------------- tahmin

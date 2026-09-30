@@ -32,8 +32,8 @@ etkisi bunun yerine 'venue' bileseniyle takim bazinda olculur.
 import math
 import statistics as st
 
-from .config import EXPECT_OFFSET, EXPECT_STEP
-from .markets import calibrate_total
+from .config import EXPECT_STEP
+from .markets import calibrate_total, expect_offset
 
 
 def _agg(vals):
@@ -308,7 +308,7 @@ LABELS = {"odds": "Oran beklentisi", "season": "Sezon gücü",
           "venue": "Saha etkisi (ev/dep.)"}
 
 
-def blend(components, weights):
+def blend(components, weights, start_ts=None):
     """Bilesenleri agirlikli harmanlar.
 
     Uretilemeyen bilesenin agirligi kalanlar arasinda ORANSAL dagitilir:
@@ -333,11 +333,11 @@ def blend(components, weights):
         sw = sum(eff[k] for k in shares)
         share = sum(eff[k] * shares[k] for k in shares) / sw
     # Kalibrasyon TEK noktada, harmanin cikisinda: bilesenler ham calisir.
-    cal = calibrate_total(total)
+    cal = calibrate_total(total, start_ts)
     return {
         "total": cal,
         "total_raw": round(total, 2),
-        "adjust": {"offset": EXPECT_OFFSET, "step": EXPECT_STEP},
+        "adjust": {"offset": expect_offset(start_ts), "step": EXPECT_STEP},
         "home": round(cal * share, 2) if share is not None and cal is not None else None,
         "away": round(cal * (1 - share), 2) if share is not None and cal is not None else None,
         "home_share": round(100 * share, 1) if share is not None else None,
@@ -386,7 +386,7 @@ class Predictor:
 
     def predict(self, match, exclude=None, detail=False):
         comp = self.components(match, exclude, detail)
-        out = blend(comp, self.weights)
+        out = blend(comp, self.weights, match.get("start_ts"))
         if out is None:
             return None
         out["weights"] = dict(self.weights)

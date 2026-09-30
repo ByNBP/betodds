@@ -5,8 +5,9 @@ cikarildi. Bilinmeyen kodlar ham haliyle gosterilir.
 """
 
 import math
+import time
 
-from .config import EXPECT_OFFSET, EXPECT_STEP
+from .config import EXPECT_OFFSET, EXPECT_OFFSET_PEAK, EXPECT_PEAK_HOURS, EXPECT_STEP
 
 GROUP_NAMES = {
     1: "Maç Sonucu",
@@ -188,8 +189,31 @@ def _normalized(pairs):
     return [(v, (1 / c) / book) for v, c in usable], book
 
 
-def calibrate_total(x: float | None) -> float | None:
-    """Ham beklentiden EXPECT_OFFSET cikarip EN YAKIN KUCUK x.5'e yuvarlar.
+def _minutes(hhmm: str) -> int:
+    h, _, m = hhmm.strip().partition(":")
+    return int(h) * 60 + int(m or 0)
+
+
+_PEAK = tuple(_minutes(x) for x in EXPECT_PEAK_HOURS.split("-", 1))
+
+
+def expect_offset(start_ts: float | None) -> float:
+    """Macin baslama saatine gore dusulecek miktar (bkz. config.EXPECT_PEAK_HOURS).
+
+    Saat yerel saatle (TZ) okunur - Sonuclar'daki gun sinirlariyla ayni.
+    """
+    if not start_ts:
+        return EXPECT_OFFSET
+    t = time.localtime(start_ts)
+    now = t.tm_hour * 60 + t.tm_min
+    return EXPECT_OFFSET_PEAK if _PEAK[0] <= now < _PEAK[1] else EXPECT_OFFSET
+
+
+def calibrate_total(x: float | None, start_ts: float | None = None) -> float | None:
+    """Ham beklentiden offset'i cikarip EN YAKIN KUCUK x.5'e yuvarlar.
+
+    Offset macin baslama saatine baglidir: 11:00-18:30 arasi 1.5, diger
+    saatlerde 0.5 (bkz. expect_offset). Asagidaki ornekler 0.5 icindir.
 
         10.17 -> (-0.5)  9.67 ->  9.5
         14.20 -> (-0.5) 13.70 -> 13.5
@@ -209,18 +233,20 @@ def calibrate_total(x: float | None) -> float | None:
     """
     if x is None:
         return None
+    off = expect_offset(start_ts)
     if EXPECT_STEP <= 0:
-        return round(x - EXPECT_OFFSET, 2)
+        return round(x - off, 2)
     half = EXPECT_STEP / 2
     # Degerin ALTINDAKI en buyuk izgara orta noktasi (k*STEP + half).
-    v = math.floor((x - EXPECT_OFFSET - half) / EXPECT_STEP) * EXPECT_STEP + half
+    v = math.floor((x - off - half) / EXPECT_STEP) * EXPECT_STEP + half
     return round(max(v, half), 2)
 
 
-def goal_expectation(values, detail: bool = False):
+def goal_expectation(values, detail: bool = False, start_ts: float | None = None):
     """Mac oncesi market setinden beklenen gol sayilari.
 
     values: [{'g':..,'t':..,'p':..,'coef':..,'blocked':..}] - tek bir snapshot.
+    start_ts: macin baslama zamani - kalibrasyon offset'i buna bagli.
     detail: True ise sonuca 'detail' anahtari eklenir; hesabin dayandigi her
     ara deger (hangi secenek, hangi oran, hangi olasilik, hangi katki) tek tek
     dokulur. Liste uclarinda kapali, mac detay sayfasinda acik kullanilir.
@@ -244,12 +270,12 @@ def goal_expectation(values, detail: bool = False):
     raw = sum(p * q for p, q in dist)
     # Gosterilen ve kullanilan deger KALIBRE olandir; 'total_raw' islemin
     # ekranda gosterilebilmesi ve harmanin ham girdiyle calismasi icin durur.
-    total = calibrate_total(raw)
+    total = calibrate_total(raw, start_ts)
     top_goals, top_prob = max(dist, key=lambda x: x[1])
 
     out = {"total": total,
            "total_raw": round(raw, 2),
-           "adjust": {"offset": EXPECT_OFFSET, "step": EXPECT_STEP},
+           "adjust": {"offset": expect_offset(start_ts), "step": EXPECT_STEP},
            "home": None, "away": None,
            "home_raw": None, "away_raw": None,
            "top_total": int(top_goals), "top_prob": round(100 * top_prob, 1),

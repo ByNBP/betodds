@@ -567,7 +567,7 @@ def match_detail(event_id: int):
     snap = _expectation_snapshot(event_id)
     e = goal_expectation(
         _rows("SELECT g, t, p, coef, blocked FROM odds_values WHERE snapshot_id=?",
-              (snap["id"],)), detail=True) if snap else None
+              (snap["id"],)), detail=True, start_ts=m.get("start_ts")) if snap else None
     if e:
         _apply_remaining(e, m, time.time(),
                          _league_match_minutes().get(m.get("champ_id"),
@@ -1394,7 +1394,8 @@ def _odds_goal(match: dict, pool: list[dict], gap: float = ODDS_GOAL_GAP,
     "tuttu mu" sorusu da anlamsizlasirdi.
 
     Beklenen gol, ortalamaya uygulamanin kendi kalibrasyonuyla bulunur
-    (bkz. markets.calibrate_total): ortalamadan 0.5 dusulup altindaki x.5'e
+    (bkz. markets.calibrate_total): ortalamadan offset (macin saatine gore
+    0.5 ya da 1.5) dusulup altindaki x.5'e
     yuvarlanir, boylece dogrudan bir Alt/Ust cizgisiyle karsilastirilabilir.
     """
     p1, p2 = match.get("p1"), match.get("p2")
@@ -1428,7 +1429,7 @@ def _odds_goal(match: dict, pool: list[dict], gap: float = ODDS_GOAL_GAP,
         "avg_home": round(sum(home) / len(picked), 2),
         "avg_away": round(sum(away) / len(picked), 2),
         "avg_total": round(avg, 2),
-        "total": calibrate_total(avg),
+        "total": calibrate_total(avg, ref_ts),
         "matches": [{"event_id": r["event_id"], "start_ts": r["start_ts"],
                      "home": r["home"], "away": r["away"],
                      "score_home": r["score_home"], "score_away": r["score_away"],
@@ -1607,7 +1608,7 @@ def _pool_expectations(pool: list[dict]) -> dict[int, dict]:
             continue
         e = goal_expectation(
             _rows("SELECT g, t, p, coef, blocked FROM odds_values "
-                  "WHERE snapshot_id=?", (snap["id"],)))
+                  "WHERE snapshot_id=?", (snap["id"],)), start_ts=m.get("start_ts"))
         if e:
             out[m["event_id"]] = e
     return out
@@ -1753,7 +1754,8 @@ def _attach_expectations(rows: list[dict]) -> None:
     minutes = _league_match_minutes()
     for m in rows:
         used = used_by_event.get(m["event_id"])
-        e = goal_expectation(values.get(used, [])) if used else None
+        e = (goal_expectation(values.get(used, []), start_ts=m.get("start_ts"))
+             if used else None)
         m["expect"] = e
         if e:
             _apply_remaining(e, m, now,

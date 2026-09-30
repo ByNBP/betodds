@@ -76,7 +76,7 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
           <th>{showDate ? 'Tarih' : 'Saat'}</th>
           <th>Maç</th>
           <th className="num">Skor</th><th className="num">Toplam</th>
-          <th className="num" title="Ham beklentiden 0.5 çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">Beklenen</th>
+          <th className="num" title="Ham beklentiden 0.5 (11:00–18:30 arası başlayan maçlarda 1.5) çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">Beklenen</th>
           {detail && <>
             <th className="num" title="Ev sahibinin maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Ev bekl.</th>
             <th className="num" title="Deplasmanın maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Dep. bekl.</th>
@@ -130,7 +130,7 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
               <td className="num"><strong>{m.score_home} - {m.score_away}</strong></td>
               <td className="num"><strong>{m.total}</strong></td>
               {/* Parantez icindeki MAVI sayi kalibrasyon oncesi ham beklenti:
-                  gosterilen deger ondan turetiliyor (ham − 0,5 → altindaki x.5). */}
+                  gosterilen deger ondan turetiliyor (ham − 0,5 ya da 11:00-18:30 arasi − 1,5 → altindaki x.5). */}
               <td className={`num ${cls(m.expect_hit, e?.total != null)}`}
                   title={adjustText(e) || undefined}>
                 {e?.total != null ? e.total.toFixed(2) : '—'}

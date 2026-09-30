@@ -233,7 +233,7 @@ export default function MatchHistory({ h2h, home, away, expect }) {
         oynanmış <em>önceki</em> maçların gol ortalaması. Sonradan oynanmış
         maçlar sayılmaz; aksi halde bitmiş bir maçın tahminine kendi geleceği
         karışırdı. Başlıktaki değer ortalamanın kalibre edilmiş hâlidir
-        (ortalama − 0,5, altındaki x.5), böylece doğrudan bir Alt/Üst
+        (ortalama − 0,5; maç 11:00–18:30 arasındaysa − 1,5; altındaki x.5), böylece doğrudan bir Alt/Üst
         çizgisiyle karşılaştırılabilir.{' '}
         <strong>Aynı oranlı maçlar</strong>: bu maçın iki takımından yalnızca
         birinin oynadığı ve o takımın aynı oranla fiyatlandığı maçlar — takım

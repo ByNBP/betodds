@@ -348,7 +348,12 @@ ham beklenti − 0.5  →  en yakın 0.5 katına yuvarla
 14.85 − 0.5 = 14.35 → 14.5
 ```
 
-Sabitler `config.py` içinde (`BETODDS_EXPECT_OFFSET`, `BETODDS_EXPECT_STEP`).
+Düşülen miktar maçın **başlama saatine** bağlı: 11:00–18:30 (yerel saat,
+11:00 dahil, 18:30 hariç) arasında başlayan maçlarda **1.5**, diğer saatlerde
+**0.5**. Başlama saati bilinmeyen bir değerde 0.5 kullanılır.
+
+Sabitler `config.py` içinde (`BETODDS_EXPECT_OFFSET`,
+`BETODDS_EXPECT_OFFSET_PEAK`, `BETODDS_EXPECT_PEAK_HOURS`, `BETODDS_EXPECT_STEP`).
 İşlem arayüzde açıkça yazılır (kartta `(14.85 − 0.5)`, hücrede tam işlem
 ipucu olarak) — gösterilen sayının türetilmiş olduğu gizlenmiyor.
 
