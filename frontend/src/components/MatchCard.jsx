@@ -67,12 +67,16 @@ export default function MatchCard({ m }) {
         {m.has_snapshot > 0 && (
           <span className="badge arch" title="Maç öncesi tüm marketler arşivlendi">arşiv</span>
         )}
-        <WinPick m={m} />
-        {isFavoriteMatch(m) && (
-          <span className="badge fav fav-match"
-                title="Favori oranı 1.80 üstü · iki takımın beklenen gol farkı 0.50 altı · ham beklenti ≥ 7.50">
-            favori maç</span>
-        )}
+        {/* Sag ust kose: kazanan tahmini, altinda "favori maç" etiketi. Ust
+            uste duruyorlar ki satir daralip durum metnini sikistirmasin. */}
+        <div className="corner">
+          <WinPick m={m} />
+          {isFavoriteMatch(m) && (
+            <span className="badge fav fav-match"
+                  title="Favori oranı 1.80 üstü · iki takımın beklenen gol farkı 0.50 altı · ham beklenti ≥ 7.50">
+              favori maç</span>
+          )}
+        </div>
       </div>
 
       {/* Birden fazla lig izleniyor: hangi maca baktigi kart uzerinde belli olmali. */}
