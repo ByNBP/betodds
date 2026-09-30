@@ -18,9 +18,9 @@
  * satirlari kullanir); aksi halde "Tuttu"ya basinca oran %100 gorunurdu.
  */
 const TILES = [
-  { key: 'expect', k: 'Beklenti tuttu',
-    sub: 'toplam gol maç öncesi beklentiyi aştı',
-    title: 'Beklenti alt sınır gibi okunuyor: "en az bu kadar gol" bekleniyordu, oldu mu?' },
+  { key: 'expect', k: 'İst. gol tuttu',
+    sub: 'toplam gol istatistik gol sayısını aştı',
+    title: 'İstatistik gol sayısı alt sınır gibi okunuyor: "en az bu kadar gol" bekleniyordu, oldu mu?' },
   { key: 'over_last', k: 'En büyük üst tuttu',
     sub: 'toplam, maçta açılan en yüksek Üst çizgisini geçti',
     title: 'Maçta açılan en yüksek Üst çizgisi — merdivenin tavanı, en uzun oranlı bacak '

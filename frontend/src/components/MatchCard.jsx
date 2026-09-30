@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { adjustText, fmtOdd, fmtTime, isFavoriteMatch, scoreText, startText,
+import { adjustText, fmtGoal, fmtOdd, fmtTime, isFavoriteMatch, scoreText, startText,
   STATUS_LABEL } from '../format.js'
 
 // Renkli nokta = seri kimligi; sayi metin renginde kalir.
@@ -73,7 +73,7 @@ export default function MatchCard({ m }) {
           <WinPick m={m} />
           {isFavoriteMatch(m) && (
             <span className="badge fav fav-match"
-                  title="Favori oranı 1.80 üstü · iki takımın beklenen gol farkı 0.50 altı · ham beklenti ≥ 7.50">
+                  title="Favori oranı 1.80 üstü · iki takımın istatistik gol farkı 0.50 altı · ham değer ≥ 7.50">
               favori maç</span>
           )}
         </div>
@@ -101,9 +101,14 @@ export default function MatchCard({ m }) {
 
       {m.expect ? (
         <div className="expect">
-          <span className="muted">beklenen gol</span>
-          {/* Kalibrasyon islemi (ham − offset) yalnizca ipucunda. */}
-          <strong title={adjustText(m.expect) || undefined}>{m.expect.total.toFixed(2)}</strong>
+          <span className="muted">istatistik gol sayısı</span>
+          <strong title={adjustText(m.expect) || undefined}>{fmtGoal(m.expect.total)}</strong>
+          {/* Mavi: macin kalibrasyon oncesi ham toplam gol beklentisi. */}
+          {m.expect.total_raw != null && (
+            <span className="adjust-note" title={adjustText(m.expect) || undefined}>
+              ({m.expect.total_raw.toFixed(2)})
+            </span>
+          )}
           {m.expect.home !== null && (
             <span className="muted">
               {m.expect.home.toFixed(2)} – {m.expect.away.toFixed(2)}

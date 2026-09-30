@@ -73,7 +73,15 @@ export function adjustText(e) {
   // Toplam Gol cizgileri her zaman x.5, beklenti de bir cizgiye denk gelmeli
   // ve o cizginin altinda kalmali (alt sinir gibi okunuyor).
   return `${e.total_raw.toFixed(2)} − ${off} → altındaki x.5 → ${e.total.toFixed(2)}`
+    + ` → ${fmtGoal(e.total)}`
 }
+
+/**
+ * Istatistik gol sayisi ekranda EN YAKIN TAM SAYI olarak yazilir (5.50 -> 6).
+ * Kalibre deger hep x.5 oldugu icin bu, "toplam > 5.5" olcutunu "toplam >= 6"
+ * diye okumakla ayni: tuttu/tutmadi hesabi degismiyor, yalnizca gosterim.
+ */
+export const fmtGoal = (v) => (v == null ? '—' : String(Math.round(v)))
 
 /**
  * "Favori maç" etiketi - uc kosulun HEPSI:

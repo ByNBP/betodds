@@ -1,4 +1,4 @@
-import { adjustText, fmtDateTime, fmtOdd } from '../format.js'
+import { adjustText, fmtDateTime, fmtGoal, fmtOdd } from '../format.js'
 
 /**
  * Mac kartinin yanindaki gecmis kutusu - iki tablo:
@@ -171,7 +171,7 @@ export default function MatchHistory({ h2h, home, away, expect }) {
         <h3>Geçmiş karşılaşma{past.length ? ` (${h2h.n})` : ''}</h3>
         {expect?.total != null && (
           <h3 className="h2h-expect">
-            Beklenen gol <strong>{expect.total.toFixed(2)}</strong>
+            İstatistik gol sayısı <strong>{fmtGoal(expect.total)}</strong>
             {/* Mavi: kalibrasyon oncesi ham deger (bkz. format.adjustText). */}
             {expect.total_raw != null && (
               <span className="adjust-note" title={adjustText(expect) || undefined}>
@@ -219,8 +219,8 @@ export default function MatchHistory({ h2h, home, away, expect }) {
       <h3 style={{ marginTop: 18 }}>
         Oran golü
         {oddsGoal?.n
-          ? <span className="muted"> · son {oddsGoal.n} maç beklenen gol{' '}
-              <strong>{oddsGoal.total}</strong></span>
+          ? <span className="muted"> · son {oddsGoal.n} maç istatistik gol sayısı{' '}
+              <strong>{fmtGoal(oddsGoal.total)}</strong></span>
           : null}
       </h3>
       <OddsGoals og={oddsGoal} home={home} away={away} />

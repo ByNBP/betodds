@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { adjustText, fmtOdd, fmtDateTime, fmtTime } from '../format.js'
+import { adjustText, fmtGoal, fmtOdd, fmtDateTime, fmtTime } from '../format.js'
 
 /**
  * Biten maclarin tablosu - panonun tepesindeki ozet ve Sonuclar sayfasi ayni
@@ -65,7 +65,7 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
     return (
       <td className={`num ${cls(ok, x != null)}`}>
         {x != null ? x.toFixed(2) : '—'}
-        {sign(ok, x != null, 'takım beklentinin üstünde gol attı', 'takım beklentinin altında kaldı')}
+        {sign(ok, x != null, 'takım istatistik gol sayısının üstünde gol attı', 'takım istatistik gol sayısının altında kaldı')}
       </td>
     )
   }
@@ -76,10 +76,10 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
           <th>{showDate ? 'Tarih' : 'Saat'}</th>
           <th>Maç</th>
           <th className="num">Skor</th><th className="num">Toplam</th>
-          <th className="num" title="Ham beklentiden 0.5 (11:00–18:30 arası başlayan maçlarda 1.5) çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">Beklenen</th>
+          <th className="num" title="İstatistik gol sayısı: ham değerden 0.5 (11:00–18:30 arası başlayan maçlarda 1.5) çıkarılıp altındaki en yakın x.5'e yuvarlanmış değer">İst. gol</th>
           {detail && <>
-            <th className="num" title="Ev sahibinin maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Ev bekl.</th>
-            <th className="num" title="Deplasmanın maç öncesi gol beklentisi — attığı gol bunu aştıysa yeşil">Dep. bekl.</th>
+            <th className="num" title="Ev sahibinin istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Ev ist.</th>
+            <th className="num" title="Deplasmanın istatistik gol sayısı — attığı gol bunu aştıysa yeşil">Dep. ist.</th>
           </>}
           <th className="num">1</th><th className="num">X</th><th className="num">2</th>
           {favorite && (
@@ -109,7 +109,7 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
           return (
             <tr key={m.event_id} className={m.expect_hit ? 'hit-row' : undefined}>
               {/* Disaridan ice aktarilan kayitlarda mac oncesi tam market
-                  seti yok - "Beklenen" ve tutan cizgiler bu satirlarda hep
+                  seti yok - "İst. gol" ve tutan cizgiler bu satirlarda hep
                   bos kalir; nedeni tarihin ustunde yaziyor. */}
               <td className="muted" title={m.source
                 ? `kaynak: ${m.source} - maç öncesi market arşivi yok`
@@ -133,12 +133,12 @@ export default function FinishedTable({ matches, showDate = false, mark = false,
                   gosterilen deger ondan turetiliyor (ham − 0,5 ya da 11:00-18:30 arasi − 1,5 → altindaki x.5). */}
               <td className={`num ${cls(m.expect_hit, e?.total != null)}`}
                   title={adjustText(e) || undefined}>
-                {e?.total != null ? e.total.toFixed(2) : '—'}
+                {fmtGoal(e?.total)}
                 {e?.total_raw != null && (
                   <span className="adjust-note"> ({e.total_raw.toFixed(2)})</span>
                 )}
                 {sign(m.expect_hit, e?.total != null,
-                      'toplam gol beklentinin üstünde', 'beklentinin altında kaldı')}
+                      'toplam gol istatistik gol sayısının üstünde', 'istatistik gol sayısının altında kaldı')}
               </td>
               {detail && <>
                 {teamExpect(e?.home, m.score_home)}

@@ -1,4 +1,4 @@
-import { fmtDateTime, fmtOdd } from '../format.js'
+import { fmtDateTime, fmtGoal, fmtOdd } from '../format.js'
 
 /**
  * "Bu beklenti nereden cikti?" paneli.
@@ -35,14 +35,14 @@ export default function ExpectationBreakdown({ expect }) {
 
   return (
     <div className="panel">
-      <div className="chart-head"><h2>Gol beklentisi nasıl hesaplandı</h2></div>
+      <div className="chart-head"><h2>İstatistik gol sayısı nasıl hesaplandı</h2></div>
       <div className="chart-sub">
         maç öncesi tek bir oran setinden · marj oransal olarak çıkarılmış ·
         aşağıdaki her sayı hesabın gerçek girdisi
       </div>
 
       <div className="kv" style={{ marginTop: 14 }}>
-        <div><div className="k">Toplam</div><div className="v">{num(expect.total)}</div></div>
+        <div><div className="k">Toplam</div><div className="v">{fmtGoal(expect.total)}</div></div>
         <div><div className="k">Ev sahibi</div><div className="v">{num(expect.home)}</div></div>
         <div><div className="k">Deplasman</div><div className="v">{num(expect.away)}</div></div>
         <div><div className="k">En olası</div>
@@ -162,7 +162,7 @@ export default function ExpectationBreakdown({ expect }) {
         <>
           <h3 className="step">3 · Gösterilen çizgi — {ln.label} <span className="muted">(G={ln.g})</span></h3>
           <div className="step-note">
-            Beklentiye ({num(expect.total)}) en yakın alt/üst çizgisi seçilir;
+            İstatistik gol sayısına ({num(expect.total)}) en yakın alt/üst çizgisi seçilir;
             eşit uzaklıkta iki çizgi olursa küçük olan.
           </div>
           <div className="scroll-x">
@@ -170,7 +170,7 @@ export default function ExpectationBreakdown({ expect }) {
               <thead>
                 <tr>
                   <th>Çizgi</th>
-                  <th className="num" title="|çizgi − beklenti|">Uzaklık</th>
+                  <th className="num" title="|çizgi − ist. gol|">Uzaklık</th>
                   <th className="num">Üst</th><th className="num">Alt</th>
                 </tr>
               </thead>
@@ -192,9 +192,9 @@ export default function ExpectationBreakdown({ expect }) {
       {/* -------------------------------------------------- 4) kalan */}
       {expect.remaining !== null && expect.remaining !== undefined && (
         <>
-          <h3 className="step">4 · Kalan gol beklentisi</h3>
+          <h3 className="step">4 · Kalan istatistik gol sayısı</h3>
           <div className="step-note">
-            Maç uzunluğu arşivden ölçüldü ({expect.match_minutes} dk medyan). Beklenti
+            Maç uzunluğu arşivden ölçüldü ({expect.match_minutes} dk medyan). İstatistik gol sayısı
             geçen süreyle doğrusal eritiliyor; <strong>atılan gol sayısı kullanılmıyor</strong>
             {' '}— Poisson sürecinde geçmiş gol geleceği değiştirmez.
           </div>

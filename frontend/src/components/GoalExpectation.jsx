@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { adjustText, fmtOdd, fmtTime } from '../format.js'
+import { adjustText, fmtGoal, fmtOdd, fmtTime } from '../format.js'
 
 /**
  * Iki ayri sayi yan yana:
@@ -17,11 +17,11 @@ export default function GoalExpectation({ matches }) {
 
   return (
     <div className="panel">
-      <div className="chart-head"><h2>Gol beklentisi</h2></div>
+      <div className="chart-head"><h2>İstatistik gol sayısı</h2></div>
       <div className="chart-sub">
-        beklenti = maç öncesi oranlardan, marj çıkarılmış · tahmin = sezon gücü,
-        oran beklentisi ve form harmanı · çizgi = beklentiye en yakın alt/üst ·
-        kalan = geçen süreye göre eritilmiş beklenti
+        ist. gol = maç öncesi oranlardan, marj çıkarılmış · tahmin = sezon gücü,
+        oran beklentisi ve form harmanı · çizgi = ist. gole en yakın alt/üst ·
+        kalan = geçen süreye göre eritilmiş ist. gol
       </div>
 
       {rows.length === 0 ? (
@@ -32,14 +32,14 @@ export default function GoalExpectation({ matches }) {
             <thead>
               <tr>
                 <th>Maç</th><th className="num">Ev</th><th className="num">Dep.</th>
-                <th className="num" title="Maç öncesi oranların ima ettiği toplam">Beklenti</th>
+                <th className="num" title="İstatistik gol sayısı: maç öncesi oranların ima ettiği toplam">İst. gol</th>
                 <th className="num"
                   title="Sezon gücü, oran beklentisi ve form harmanı — detay için tıklayın">
                   Tahmin</th>
                 <th className="num">En olası</th>
-                <th className="num" title="Beklentiye en yakın alt/üst çizgisi">Çizgi</th>
+                <th className="num" title="İstatistik gol sayısına en yakın alt/üst çizgisi">Çizgi</th>
                 <th className="num">Üst</th><th className="num">Alt</th>
-                <th className="num" title="Maçın kalan süresinde beklenen gol">Kalan</th>
+                <th className="num" title="Maçın kalan süresi için istatistik gol sayısı">Kalan</th>
               </tr>
             </thead>
             <tbody>
@@ -54,7 +54,7 @@ export default function GoalExpectation({ matches }) {
                     <td className="num">{e.home?.toFixed(2) ?? '—'}</td>
                     <td className="num">{e.away?.toFixed(2) ?? '—'}</td>
                     <td className="num" title={adjustText(e) || undefined}>
-                      <strong>{e.total.toFixed(2)}</strong>
+                      <strong>{fmtGoal(e.total)}</strong>
                       {e.total_raw != null && (
                         <div className="adjust-note">
                           {e.total_raw.toFixed(2)} − {e.adjust?.offset ?? 0.5}

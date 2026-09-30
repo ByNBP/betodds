@@ -328,7 +328,7 @@ export default function Results({ champ, leagues, onChamp }) {
               {data.avg_goals != null && <> · maç başı <strong>{data.avg_goals}</strong> gol</>}
               {!hit && data.counts && data.counts.hit + data.counts.miss > 0 && (
                 <> · <strong>{data.counts.hit}</strong>/{data.counts.hit + data.counts.miss} maçta
-                  toplam beklentinin üstünde</>
+                  toplam istatistik gol sayısının üstünde</>
               )}
               {anyFilter && <> · {active.join(' · ')}</>}
             </span>
@@ -371,7 +371,7 @@ export default function Results({ champ, leagues, onChamp }) {
             <div className="print-meta">
               <span>{league ? league.name : 'Tüm ligler'}</span>
               {active.map((a) => <span key={a}>{a}</span>)}
-              <span>Beklenti: {filterLabel(hit)}</span>
+              <span>İst. gol: {filterLabel(hit)}</span>
               {data?.favorite && (
                 <span>
                   Favori {data.favorite.favorite} · Sürpriz {data.favorite.surprise}
@@ -383,7 +383,7 @@ export default function Results({ champ, leagues, onChamp }) {
               {!hit && data?.counts && data.counts.hit + data.counts.miss > 0 && (
                 <span>
                   {data.counts.hit}/{data.counts.hit + data.counts.miss} maçta
-                  {' '}toplam beklentinin üstünde
+                  {' '}toplam istatistik gol sayısının üstünde
                 </span>
               )}
               <span>{new Date().toLocaleString('tr-TR')}</span>
