@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { adjustText, fmtOdd, fmtTime, scoreText, startText, STATUS_LABEL } from '../format.js'
+import { adjustText, fmtOdd, fmtTime, isFavoriteMatch, scoreText, startText,
+  STATUS_LABEL } from '../format.js'
 
 // Renkli nokta = seri kimligi; sayi metin renginde kalir.
 const ODDS = [
@@ -67,6 +68,11 @@ export default function MatchCard({ m }) {
           <span className="badge arch" title="Maç öncesi tüm marketler arşivlendi">arşiv</span>
         )}
         <WinPick m={m} />
+        {isFavoriteMatch(m) && (
+          <span className="badge fav fav-match"
+                title="Favori oranı 1.80 üstü · iki takımın beklenen gol farkı 0.50 altı · ham beklenti ≥ 7.50">
+            favori maç</span>
+        )}
       </div>
 
       {/* Birden fazla lig izleniyor: hangi maca baktigi kart uzerinde belli olmali. */}

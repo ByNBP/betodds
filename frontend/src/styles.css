@@ -97,6 +97,9 @@ h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
 .card .win-pick { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0;
   max-width: 55%; color: var(--text); font-weight: 600; white-space: nowrap; }
 .card .win-team { overflow: hidden; text-overflow: ellipsis; }
+/* "Favori maç" etiketi en sag ustte; kazanan tahmini yoksa koseyi kendisi alir. */
+.card .fav-match { margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+.card .win-pick + .fav-match { margin-left: 0; }
 .card .teams { display: grid; grid-template-columns: 1fr auto 1fr;
   align-items: center; gap: 10px; margin-bottom: 12px; }
 .card .team { font-weight: 600; }

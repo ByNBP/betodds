@@ -74,3 +74,25 @@ export function adjustText(e) {
   // ve o cizginin altinda kalmali (alt sinir gibi okunuyor).
   return `${e.total_raw.toFixed(2)} − ${off} → altındaki x.5 → ${e.total.toFixed(2)}`
 }
+
+/**
+ * "Favori maç" etiketi - uc kosulun HEPSI:
+ *   1. Favori orani (mac oncesi 1 ve 2'den dusugu) 1.80'in USTUNDE,
+ *   2. iki takimin beklenen golu (kartta yazan, kalibre) arasindaki fark
+ *      0.50'nin ALTINDA,
+ *   3. ham beklenti (kalibrasyon oncesi, "parantez ici") >= 7.50.
+ * Mac oncesi oran yoksa (p1/p2) o anki 1X2'ye bakilir - baslamamis macta
+ * ikisi ayni sey. Veri eksikse etiket yok.
+ */
+export const FAV_MATCH = { minFavOdd: 1.80, maxGoalGap: 0.50, minRaw: 7.50 }
+
+export function isFavoriteMatch(m) {
+  const e = m.expect
+  const o1 = m.p1 ?? m.o1
+  const o2 = m.p2 ?? m.o2
+  if (!e || o1 == null || o2 == null || e.home == null || e.away == null
+      || e.total_raw == null) return false
+  return Math.min(o1, o2) > FAV_MATCH.minFavOdd
+    && Math.abs(e.home - e.away) < FAV_MATCH.maxGoalGap
+    && e.total_raw >= FAV_MATCH.minRaw
+}
