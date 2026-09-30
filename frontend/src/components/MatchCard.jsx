@@ -114,13 +114,21 @@ export default function MatchCard({ m }) {
               ({m.expect.total_raw.toFixed(2)})
             </span>
           )}
-          {m.expect.home !== null && (
-            <span className="muted">
-              {m.expect.home.toFixed(2)} – {m.expect.away.toFixed(2)}
-            </span>
-          )}
         </div>
       ) : <div className="expect muted">maç öncesi arşiv yok</div>}
+      {/* Sonuclar tablosundaki Maç ist. / Ev ist. / Dep. ist. sutunlarinin
+          karttaki karsiligi - ayni degerler, ayni adlar. */}
+      {m.expect && (
+        <div className="stat-line">
+          <span><span className="muted">Maç ist.</span>{' '}
+            <span className="raw-stat">{m.expect.total_raw != null
+              ? m.expect.total_raw.toFixed(2) : '—'}</span></span>
+          <span><span className="muted">Ev ist.</span>{' '}
+            {m.expect.home != null ? m.expect.home.toFixed(2) : '—'}</span>
+          <span><span className="muted">Dep. ist.</span>{' '}
+            {m.expect.away != null ? m.expect.away.toFixed(2) : '—'}</span>
+        </div>
+      )}
 
       <div className="odds">
         {ODDS.map((o) => (

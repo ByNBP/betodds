@@ -221,6 +221,10 @@ td.raw-stat { color: var(--accent); }
 /* Kart icindeki gol beklentisi - mini grafigin yerini aldi. */
 .expect { display: flex; align-items: baseline; gap: 8px; font-size: 13px;
   padding: 8px 0; min-height: 34px; }
+/* Kartta istatistik gol sayisinin altindaki Maç/Ev/Dep. ist. satiri. */
+.card .stat-line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px;
+  margin: -4px 0 10px; font-variant-numeric: tabular-nums; }
+.card .stat-line .raw-stat { color: var(--accent); }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #06121f;
